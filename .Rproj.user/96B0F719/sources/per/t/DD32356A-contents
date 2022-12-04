@@ -1,0 +1,75 @@
+library(haven)
+library("survival")
+library("survminer")
+library(multcomp)
+library(ggplot2)
+
+
+setwd("/Users/Erica/Desktop/Fall2022/EPI 550 Methods 3")
+
+data = read_sas("stillbirth_hw10.sas7bdat")
+
+names(data)
+
+data$ln_n = log(data$deliveries)
+
+m <- glm(stillbirths ~ medicaid
+                  + offset(ln_n),
+                  family = "poisson",
+                  data = data)
+
+summary(m)
+exp(-0.05299)
+
+cbind(exp(coef(m)),
+      exp(confint.default(m)))
+
+
+m <- glm(stillbirths ~ fp_Q2 + fp_Q3 + fp_Q4
+         + offset(ln_n),
+         family = "poisson",
+         data = data)
+
+summary(m)
+exp(0.01319)
+exp(0.08410)
+exp(0.19971)
+
+
+cbind(exp(coef(m)),
+      exp(confint.default(m)))
+
+
+
+
+
+
+m <- glm(stillbirths ~ medicaid + fp_Q2 + fp_Q3 + fp_Q4 + medicaid*(fp_Q2 + fp_Q3 + fp_Q4)
+         + offset(ln_n),
+         family = "poisson",
+         data = data)
+
+summary(m)
+ 
+exp(0.11643)
+exp(-0.37542)
+exp(-0.54321)
+
+
+cbind(exp(coef(m)),
+      exp(confint.default(m)))
+
+
+
+m_full <- glm(stillbirths ~ medicaid + fp_Q2 + fp_Q3 + fp_Q4 + medicaid*(fp_Q2 + fp_Q3 + fp_Q4)
+         + offset(ln_n),
+         family = "poisson",
+         data = data)
+
+
+m_reduced <- glm(stillbirths ~ medicaid + fp_Q2 + fp_Q3 + fp_Q4
+         + offset(ln_n),
+         family = "poisson",
+         data = data)
+
+anova(m_full, m_reduced, test="Chisq")
