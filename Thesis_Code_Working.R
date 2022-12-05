@@ -83,6 +83,9 @@ for (i in 1:length(poi_files)){
 }
 saveRDS(object=weeks_poi_data, file="~/Library/CloudStorage/OneDrive-EmoryUniversity/Erica thesis/weeks_poi_data.RDS")
 
+######loading in the data#####
+data = readRDS("~/Library/CloudStorage/OneDrive-EmoryUniversity/Erica thesis/weeks_poi_data.RDS")
+
 names(weeks_poi_data)
 
 weeks_poi_data[1,"iso_country_code"]
