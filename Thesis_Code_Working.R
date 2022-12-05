@@ -64,68 +64,28 @@ NAICS = read.csv("/Users/Erica/Library/CloudStorage/OneDrive-EmoryUniversity/Eri
 
 NAICS=NAICS[,c(-1,-3)]
 
+setwd("~/Library/CloudStorage/OneDrive-EmoryUniversity/Erica thesis/GA_Safegraph_Weeklydata/")
+
 # Grabbing all needed poi files
 poi_files = list.files(path = "/Users/Erica/Library/CloudStorage/OneDrive-EmoryUniversity/Erica thesis/GA_Safegraph_Weeklydata/", pattern = "*.RDS")
-
-poi_files = data_frame(poi_files) %>% mutate(filepath = paste0(inital, filename))
-
-
-for (i in 1:length(poi_files)){
-  poi_files %>% rowwise() %>%
-    do(., readRDS(file=.$filepath)) %>% 
-    dplyr::filter(placekey %in% NAICS_list_catagory$placekey)
-}
-
-
-
-# Trying one file to add NAICS codes and categories
 inital = "~/Library/CloudStorage/OneDrive-EmoryUniversity/Erica thesis/GA_Safegraph_Weeklydata/"
 
-Week1.2020_03_23 = readRDS(paste(inital,poi_files[[1]], sep = "")) %>% 
-  dplyr::filter(placekey %in% NAICS_list_catagory$placekey)
+# week one data
+df_1 <- poi_files[1] %>%  map_df(~readRDS(.)) %>% dplyr::filter(placekey %in% NAICS$placekey) %>%
+  mutate( week = 1) %>% left_join(.,NAICS, by = "placekey" )
 
-Week1.2020_03_23 = left_join(Week1.2020_03_23,NAICS_list_catagory, by = "placekey" )
-
-
-dat <- gsub("comb.RDS","",poi_files[[1]])
-x = paste("Week1",dat, sep = ".") 
-
-names(Week1.2020_03_23)
-
-dat <- gsub("comb.RDS","",poi_files[[1]])
-paste("Week1",dat, sep = ".") 
-
-
-
-### In loop form for all the files
+# looping to rbind all poi data
 for (i in 1:length(poi_files)){
-  
-  dat <- gsub("comb.RDS","",filenames[[i]])
-  df <- readRDS(paste("Safegraph/data/comb/",filenames[[i]], sep = ""))
-  df1<- expand_cat_json(df, 'visitor_home_cbgs', by="placekey")%>% 
-    arrange(placekey) %>%
-    left_join(df %>% select(placekey, poi_cbg) %>%
-                arrange(placekey))
-  
-  df2 <- df1 %>% 
-    mutate(home_county = substr(index, 3, 5),   ## Extract county fips from the home CBG
-           poi_county = substr(poi_cbg, 3,5)) %>%     
-    
-    group_by(home_county, poi_county) %>%                 
-    summarise(n=sum(visitor_home_cbgs)) %>% 
-    arrange(home_county) %>% 
-    left_join(home_panel_county[home_panel_county$week_start==dates[[i]],] %>% 
-                arrange(county_fips),
-              by = c("home_county"="county_fips"), 
-              keep=F) %>%
-    filter(!is.na(week_start)) %>%
-    mutate(pop_flow = n/sampling_frac)
-  
-  saveRDS(df2, paste("Safegraph/data/od_trips/", dat, ".RDS",sep = "")) 
+  df <- poi_files[i] %>%  map_df(~readRDS(.)) %>% dplyr::filter(placekey %in% NAICS$placekey) %>%
+    mutate( week = i) %>% left_join(.,NAICS, by = "placekey" )
+  weeks_poi_data = rbind(df,df_1)
+  df_1 = weeks_poi_data
 }
+saveRDS(object=weeks_poi_data, file="~/Library/CloudStorage/OneDrive-EmoryUniversity/Erica thesis/weeks_poi_data.RDS")
 
+names(weeks_poi_data)
 
-
+weeks_poi_data[1,"iso_country_code"]
 
 # Write up the potential different analysis 
 # 
