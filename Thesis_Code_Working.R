@@ -86,20 +86,87 @@ saveRDS(object=weeks_poi_data, file="~/Library/CloudStorage/OneDrive-EmoryUniver
 ######loading in the data#####
 data = readRDS("~/Library/CloudStorage/OneDrive-EmoryUniversity/Erica thesis/weeks_poi_data.RDS")
 
-names(weeks_poi_data)
+names(data)
 
-weeks_poi_data[1,"iso_country_code"]
+# checking catagories with a quick look through
+meal = data[data$Catagory == "meal",]
 
+# GETTING THE COUNTY FIPS
+data = data %>% mutate(countyFIPS= substr(poi_cbg, 3,5 ),
+                stateFIPS = substr(poi_cbg,1,2))
+  # checking
+head(data[,c("poi_cbg", "countyFIPS", "stateFIPS")])
+table(data$countyFIPS)
+
+  # saving
+saveRDS(object=data, file="~/Library/CloudStorage/OneDrive-EmoryUniversity/Erica thesis/weeks_poi_data.RDS")
+
+# Merging Data for all time independent
+  # importing GA county name to fips
+      county_fips = read_xlsx("/Users/Erica/Library/CloudStorage/OneDrive-EmoryUniversity/Erica thesis/ga_county_fips.xlsx")%>% mutate(
+        countyFIPS= substr(fips, 3,5 ),
+        stateFIPS = substr(fips,1,2),
+        county_name_all_upper = toupper(name)
+        ) %>% rename(
+        county_name = name
+      )
+
+  # county median age
+      age = read_xlsx("~/Library/CloudStorage/OneDrive-EmoryUniversity/Erica thesis/median_age_county_2015_to_2019.xlsx") %>%
+       dplyr::filter(state == "Georgia") %>% mutate(
+         countyFIPS= substr(fips, 3,5 ),
+         stateFIPS = substr(fips,1,2)
+          )
+  # county household size
+      house_size = read_xlsx("/Users/Erica/Library/CloudStorage/OneDrive-EmoryUniversity/Erica thesis/_Persons per household 2014-2018 - (Average).xlsx")
+        
+      house_size = right_join(house_size, county_fips, by = c("County" = "county_name")) %>%
+        dplyr::select("County", "Persons per household", "countyFIPS")
+  # Urbanicity
+      urbanicity = read_xlsx("/Users/Erica/Library/CloudStorage/OneDrive-EmoryUniversity/Erica thesis/urbanicity.xlsx")%>%
+        dplyr::filter(`State Abr.` == "GA") %>% mutate(
+          countyFIPS= substr("FIPS code", 3,5 ),
+          stateFIPS = substr("FIPS code",1,2)
+        )
+      urban_level_fun = function(x) {
+        ifelse(x == 1, return ("Large central metro"),
+               ifelse(x == 2, return("large fringe metro"),
+                      ifelse(x == 3, return("Medium metro"),
+                             ifelse(x == 4,return("Small metro"),
+                                    ifelse(x == 5, return("Micropolitan"),
+                                           ifelse(x == 6, return("Noncore"), return(NA)))))))
+      }
+      
+      urbanicity$level_of_urban = apply(urbanicity[,"2013 code"], 1,urban_level_fun)
+  # Income
+      income = read_xls("/Users/Erica/Library/CloudStorage/OneDrive-EmoryUniversity/Erica thesis/GA_COUNTY_personal income per capita_2020_prep.xls") %>%
+        dplyr::filter(LineCode == 3) %>% mutate(
+          countyFIPS= substr(GeoFips, 3,5 ),
+          stateFIPS = substr(GeoFips,1,2)
+        )
+  # Pop % 65 and older
+      pop_65_plus = read_xlsx("/Users/Erica/Library/CloudStorage/OneDrive-EmoryUniversity/Erica thesis/ga_county_pop_2020.xlsx") %>%
+        dplyr::select("County", "2020 Population 65 and Over, Percent") 
+      pop_65_plus = right_join(pop_65_plus, county_fips, by = c("County" = "county_name_all_upper")) %>%
+        dplyr::select("County", "2020 Population 65 and Over, Percent", "countyFIPS") %>% rename(
+          pop_65_plus_ratio = `2020 Population 65 and Over, Percent`
+        )
+  # political affiliation
+      politics = read_xlsx("/Users/Erica/Library/CloudStorage/OneDrive-EmoryUniversity/Erica thesis/Georgia 2020 RLA Report.xlsx") %>%
+        right_join( county_fips, by = c("County" = "county_name_all_upper")) %>%
+        dplyr::select("County", "Trump", "Biden", "Jorgensen","Total", "countyFIPS")
+  
+  # MERGING
+      time_indepentent_data = right_join(house_size, income, by = "countyFIPS")
+      
+      
 # Write up the potential different analysis 
 # 
-# Wrangle data 
 # Figure out what the visit patterens look like of the first day of the week 
 # Give a few maps
 # 
 # Look at some discriptives
 # 
 # Treat this as a time seres
-
-
 
 
