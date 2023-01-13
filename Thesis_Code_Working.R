@@ -138,6 +138,8 @@ saveRDS(object=data, file="~/Library/CloudStorage/OneDrive-EmoryUniversity/Erica
       }
       
       urbanicity$level_of_urban = apply(urbanicity[,"2013 code"], 1,urban_level_fun)
+      urbanicity$countyFIPS= substr(urbanicity$`FIPS code`, 3,5 )
+      urbanicity$stateFIPS= substr(urbanicity$`FIPS code`, 1,2 )
   # Income
       income = read_xls("/Users/Erica/Library/CloudStorage/OneDrive-EmoryUniversity/Erica thesis/GA_COUNTY_personal income per capita_2020_prep.xls") %>%
         dplyr::filter(LineCode == 3) %>% mutate(
@@ -157,9 +159,27 @@ saveRDS(object=data, file="~/Library/CloudStorage/OneDrive-EmoryUniversity/Erica
         dplyr::select("County", "Trump", "Biden", "Jorgensen","Total", "countyFIPS")
   
   # MERGING
-      time_indepentent_data = right_join(house_size, income, by = "countyFIPS")
+      time_indepentent_data = right_join(house_size, income, by = "countyFIPS") %>% rename(
+        percap_personal_income_2020 = "2020",
+        household_size = `Persons per household`) %>%
+        dplyr::select("percap_personal_income_2020","countyFIPS", "household_size")
+      time_indepentent_data = right_join(time_indepentent_data, age, by = "countyFIPS") %>%
+        dplyr::select("countyFIPS", "percap_personal_income_2020", "household_size", "median_age_2019")
+      time_indepentent_data = right_join(time_indepentent_data, politics, by = "countyFIPS") %>% rename(
+        trump_votes = Trump,
+        biden_votes = Biden,
+        jorgensen_votes = Jorgensen,
+        total_votes = Total
+      ) %>% dplyr::select("countyFIPS", "percap_personal_income_2020", "household_size", "median_age_2019", "trump_votes","biden_votes","jorgensen_votes","total_votes")      
+      time_indepentent_data = right_join(time_indepentent_data, pop_65_plus, by = "countyFIPS") %>% 
+        dplyr::select("countyFIPS", "percap_personal_income_2020", "household_size", "median_age_2019", "trump_votes","biden_votes","jorgensen_votes","total_votes", "pop_65_plus_ratio")      
+       time_indepentent_data = right_join(time_indepentent_data, urbanicity, by = "countyFIPS") %>% rename(urban_code_2013 = `2013 code`) %>% 
+        dplyr::select("countyFIPS", "percap_personal_income_2020", "household_size", "median_age_2019", "trump_votes","biden_votes", "jorgensen_votes","total_votes", "pop_65_plus_ratio", "urban_code_2013", "level_of_urban")
+  # Saving
+       write.csv(time_indepentent_data, "/Users/Erica/Library/CloudStorage/OneDrive-EmoryUniversity/Erica thesis/time_indepentent_data.csv")
       
-      
+       
+
 # Write up the potential different analysis 
 # 
 # Figure out what the visit patterens look like of the first day of the week 
