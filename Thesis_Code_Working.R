@@ -202,12 +202,31 @@ saveRDS(object=data, file="~/Library/CloudStorage/OneDrive-EmoryUniversity/Erica
     ggplot(time_indepentent_data, aes(x = factor(median_age_2019), y = total_deaths)) + 
       geom_bar(stat = "identity")
     plot(time_indepentent_data$trump_votes/time_indepentent_data$total_votes, time_indepentent_data$total_deaths)
+    plot(time_indepentent_data$percap_personal_income_2020, time_indepentent_data$household_size)
+    plot(time_indepentent_data$percap_personal_income_2020, time_indepentent_data$household_size)
+    plot(time_indepentent_data$pop_65_plus_ratio, time_indepentent_data$total_deaths)
+    ggplot(time_indepentent_data, aes(x = factor(level_of_urban), y = total_deaths)) + 
+      geom_bar(stat = "identity")
+    plot(time_indepentent_data$pop_65_plus_ratio,time_indepentent_data$trump_votes/time_indepentent_data$total_votes)
+    ggplot(time_indepentent_data, aes(x = factor(level_of_urban), y = percap_personal_income_2020)) + 
+      geom_bar(stat = "identity")
+    plot(time_indepentent_data$median_age_2019, time_indepentent_data$percap_personal_income_2020)
        
 # Grouping safe_graph data by catatory
-    grouped_data = data %>% group_by(countyFIPS, Catagory)  %>% summarise(
-      mean_
+    grouped_data = data %>% group_by(countyFIPS, week, Catagory)  %>% summarise(
+      mean_normalized_visits_by_state_scaling = mean(normalized_visits_by_state_scaling),
+      mean_normalized_visits_by_total_visits = mean(normalized_visits_by_total_visits),
+      mean_normalized_visits_by_total_visitors = mean(normalized_visits_by_total_visitors),
+      mean_normalized_visits_by_region_naics_visits = mean(normalized_visits_by_region_naics_visits),
+      mean_normalized_visits_by_region_naics_visitors = mean(normalized_visits_by_region_naics_visitors)
     )
+    cat_trans_1= grouped_data[grouped_data$Catagory == "meal" & grouped_data$week == 1,]
+    plot(cat_trans$mean_normalized_visits_by_state_scaling)
     
+# breaking up covid death data into multiple sets to add to other time dependent data
     
-
+# Potential next steps:
+    # get all of the time dependent data into one data set
+    # determine if any of the cofounders are overally corelated
+    # determine which variables 
 
