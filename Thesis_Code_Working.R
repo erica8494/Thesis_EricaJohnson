@@ -16,7 +16,8 @@ pacman::p_load(tidyverse,
                SpatialEpi,
                CARBayes,
                data.table,
-               coda)
+               coda,
+               ggplot2)
 #####Setting up NAICS Catagories and getting only GA poi###########
 files =  list.files(path = "/Users/Erica/Library/CloudStorage/OneDrive-SharedLibraries-EmoryUniversity/Liu, Carol - Erica thesis/poi_info/", pattern = "*.csv.gz") 
 
@@ -177,16 +178,36 @@ saveRDS(object=data, file="~/Library/CloudStorage/OneDrive-EmoryUniversity/Erica
         dplyr::select("countyFIPS", "percap_personal_income_2020", "household_size", "median_age_2019", "trump_votes","biden_votes", "jorgensen_votes","total_votes", "pop_65_plus_ratio", "urban_code_2013", "level_of_urban")
   # Saving
        write.csv(time_indepentent_data, "/Users/Erica/Library/CloudStorage/OneDrive-EmoryUniversity/Erica thesis/time_indepentent_data.csv")
-      
+# Merging Data for all time dependent
+  # COVID Deaths
+       covid_deaths = read.csv("/Users/Erica/Library/CloudStorage/OneDrive-EmoryUniversity/Erica thesis/covid_confirmed_usafacts.csv")  %>%
+         dplyr::filter(State == "GA") %>% mutate(
+           countyFIPS= substr(countyFIPS, 3,5 ),
+           stateFIPS = substr(countyFIPS,1,2)
+         )
+       covid_deaths$week = rownames(covid_deaths)
        
-
-# Write up the potential different analysis 
-# 
-# Figure out what the visit patterens look like of the first day of the week 
-# Give a few maps
-# 
-# Look at some discriptives
-# 
-# Treat this as a time seres
+           write.csv(covid_deaths, "/Users/Erica/Library/CloudStorage/OneDrive-EmoryUniversity/Erica thesis/Deaths_GA.csv")
+    # importing the COVID Deaths per week
+       covid_deaths = read.csv("/Users/Erica/Library/CloudStorage/OneDrive-EmoryUniversity/Erica thesis/COVID_Deaths_GA.csv")  %>%
+         mutate(
+           countyFIPS= substr(FIPS, 3,5 )
+         )
+       covid_deaths_time_ind = covid_deaths[,c(2,109,110)]
+    # adding total deaths to time_independent data
+       time_indepentent_data = right_join(time_indepentent_data, covid_deaths_time_ind, by = "countyFIPS")
+# Graphing 
+    plot(time_indepentent_data$percap_personal_income_2020, time_indepentent_data$total_deaths)
+    plot(time_indepentent_data$household_size, time_indepentent_data$total_deaths)
+    ggplot(time_indepentent_data, aes(x = factor(median_age_2019), y = total_deaths)) + 
+      geom_bar(stat = "identity")
+    plot(time_indepentent_data$trump_votes/time_indepentent_data$total_votes, time_indepentent_data$total_deaths)
+       
+# Grouping safe_graph data by catatory
+    grouped_data = data %>% group_by(countyFIPS, Catagory)  %>% summarise(
+      mean_
+    )
+    
+    
 
 
