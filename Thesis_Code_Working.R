@@ -17,7 +17,7 @@ pacman::p_load(tidyverse,
                CARBayes,
                data.table,
                coda,
-               ggplot2)
+               ggplot2, xlsx)
 #####Setting up NAICS Catagories and getting only GA poi###########
 files =  list.files(path = "/Users/Erica/Library/CloudStorage/OneDrive-SharedLibraries-EmoryUniversity/Liu, Carol - Erica thesis/poi_info/", pattern = "*.csv.gz") 
 
@@ -177,6 +177,9 @@ saveRDS(object=data, file="~/Library/CloudStorage/OneDrive-EmoryUniversity/Erica
        time_indepentent_data = right_join(time_indepentent_data, urbanicity, by = "countyFIPS") %>% rename(urban_code_2013 = `2013 code`) %>% 
         dplyr::select("countyFIPS", "percap_personal_income_2020", "household_size", "median_age_2019", "trump_votes","biden_votes", "jorgensen_votes","total_votes", "pop_65_plus_ratio", "urban_code_2013", "level_of_urban")
   # Saving
+       install.packages("xlsx")
+       library("xlsx")
+      xlsx::write.xlsx(time_indepentent_data,"/Users/Erica/Library/CloudStorage/OneDrive-EmoryUniversity/Erica thesis/time_indepentent_data.xlsx" )
        write.csv(time_indepentent_data, "/Users/Erica/Library/CloudStorage/OneDrive-EmoryUniversity/Erica thesis/time_indepentent_data.csv")
 # Merging Data for all time dependent
   # COVID Deaths
@@ -220,13 +223,96 @@ saveRDS(object=data, file="~/Library/CloudStorage/OneDrive-EmoryUniversity/Erica
       mean_normalized_visits_by_region_naics_visits = mean(normalized_visits_by_region_naics_visits),
       mean_normalized_visits_by_region_naics_visitors = mean(normalized_visits_by_region_naics_visitors)
     )
-    cat_trans_1= grouped_data[grouped_data$Catagory == "meal" & grouped_data$week == 1,]
-    plot(cat_trans$mean_normalized_visits_by_state_scaling)
+    cat_trans_1= grouped_data[grouped_data$Catagory == "meal",]
+    plot(cat_trans_1$mean_normalized_visits_by_state_scaling, cat_trans_1$week)
+    names(cat_trans_1)
     
 # breaking up covid death data into multiple sets to add to other time dependent data
+    #df %>% pivot_longer(cols=week1:week2, names_to= "week", values_to="vax_val)
+    # need to remove everything but county and weeks data
+  temp = read.csv("/Users/Erica/Library/CloudStorage/OneDrive-EmoryUniversity/Erica thesis/COVID_Deaths_GA_toLong.csv")  %>%
+    pivot_longer(!FIPS, names_to = "Week", values_to = "Deaths")  %>% mutate(
+      countyFIPS= substr(FIPS, 3,5 ),
+      Week =as.numeric(gsub("X","",temp$Week) ))
+  # Merging
+  time_depentent_data = grouped_data %>% inner_join(temp, by=c("countyFIPS" = "countyFIPS",  "week" = "Week") ) %>% 
+    dplyr::select(-"FIPS")
+  
+  
+  # Saving
+  write.csv(time_depentent_data, "/Users/Erica/Library/CloudStorage/OneDrive-EmoryUniversity/Erica thesis/time_depentent_data.csv")
+  
+  
+  # Vac importing
+  vac = read.csv("/Users/Erica/Library/CloudStorage/OneDrive-EmoryUniversity/Erica thesis/COVID-19_Vaccinations_in_the_United_States_County.csv") %>%
+    dplyr::filter(Recip_State == "GA")
+  
+  # mutate for what week each date corresponds to - calander week
+  # group by week and county
+  # then how many new vac for that time period
+  
+
+# Merging all data but vaccination into one data set
+  All_data = time_depentent_data %>% inner_join(time_indepentent_data, by=("countyFIPS" = "countyFIPS")) 
+  
+  # Adding in spatical data
+  ga_space = st_read('/Users/Erica/Library/CloudStorage/OneDrive-EmoryUniversity/Erica thesis/ga_mvc.gpkg') %>% mutate(
+    countyFIPS= substr(GEOID, 3,5 )) %>% dplyr::select("countyFIPS")
+  
+  All_data = All_data %>% left_join(ga_space, by=("countyFIPS" = "countyFIPS")) 
+  st_geometry(All_data) <- All_data$geom
+  
+  # saving all data together
+  st_write(All_data,'/Users/Erica/Library/CloudStorage/OneDrive-EmoryUniversity/Erica thesis/all_data.gpkg',append=FALSE)
+  
+  All_data_meal = All_data[All_data$Catagory == "meal", ]
+  st_geometry(All_data_meal) <- All_data_meal$geom
+  All_data_edu = All_data[All_data$Catagory == "education", ]
+  All_data_trans = All_data[All_data$Catagory == "transportation", ]
+  All_data_grocery = All_data[All_data$Catagory == "grocery", ]     
+  
+  names(All_data_meal)
+  
+  
+  # percentage change in movement to these place
+# Plotting
+  base_map <- tm_shape(All_data_meal[All_data_meal$week == 1,]) +
+    tm_borders(alpha = 0.2) 
+    coord_quickmap() +
+    theme_void() 
+  base_map
+  
+  map_with_data <- base_map +
+    geom_point(data = All_data_meal[All_data_meal$week == 1,], aes(mean_normalized_visits_by_total_visits, Deaths, group=week))
+  map_with_data
+  
+  
+  ggplot(All_data_meal) + geom_point(aes(mean_normalized_visits_by_total_visits, Deaths))
+  
+  map_with_animation <-ggplot(st_geometry(ga_space)) +
+    geom_point(data = All_data_meal, aes(mean_normalized_visits_by_total_visits, Deaths, group=week)) +
+    transition_time(week) +
+    ggtitle('Week: {frame_time}',
+            subtitle = 'Frame {frame} of {nframes}')
+  num_years <- max(All_data_meal$week) - min(All_data_meal$week) + 1
+  animate(map_with_animation, nframes = num_years)
+  
+# use ggplots facit raping (facet_wrap(~week)) -> variable you want to split it up by
+    # looking at a random sample
+        # might be better to look at the epidemic and see graphs for up weeks and low weeks
+        # or other "special" weeks like christmas/holiday/change in stay at home orders
+    # county map -> mobility from and to the county
     
+  
+# PPT FOR TOMORROW
 # Potential next steps:
     # get all of the time dependent data into one data set
     # determine if any of the cofounders are overally corelated
     # determine which variables 
+    
+    # get facebook data by mid feburary
+    
+# small write up on why perdiction might be better then assiciation using machine learning to get that
+  
+  #abstract submission for epidemics conference -> June submission
 
