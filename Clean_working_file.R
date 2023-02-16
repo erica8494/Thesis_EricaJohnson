@@ -1,8 +1,8 @@
 
 # loading in packages
-pacman::p_load(tidyverse,tidycensus,tigris,sp,sf,tmap,spatstat,sparr,maptools,raster,dplyr, readxl,DCluster,spdep,SpatialEpi,
-               CARBayes,data.table,coda,ggplot2, xlsx,reticulate,gplots,ComplexHeatmap,
-               reshape2, av, gifski,  paletteer)
+pacman::p_load(tidyverse, tidycensus, tigris, sp, sf, tmap, spatstat, sparr, maptools, raster, dplyr, 
+               readxl, DCluster, spdep, SpatialEpi, CARBayes, data.table, coda, ggplot2, xlsx,
+               reticulate, gplots, ComplexHeatmap, reshape2, av, gifski, paletteer, cartography)
 
 # loading data into R
 time_indepentent_data = read.csv("/Users/Erica/Library/CloudStorage/OneDrive-EmoryUniversity/Erica thesis/time_indepentent_data.csv")
@@ -45,13 +45,13 @@ All_data = st_read('/Users/Erica/Library/CloudStorage/OneDrive-EmoryUniversity/E
       densityHeatmap(df)
       
   # looking at changes over time
-      All_data_meal = All_data[All_data$Catagory == "meal", ]
+      All_data_meal = fixed_All_data[fixed_All_data$Catagory == "meal", ]
         st_geometry(All_data_meal) <- All_data_meal$geom
-      All_data_edu = All_data[All_data$Catagory == "education", ]
+      All_data_edu = fixed_All_data[fixed_All_data$Catagory == "education", ]
         st_geometry(All_data_edu) <- All_data_edu$geom
-      All_data_trans = All_data[All_data$Catagory == "transportation", ]
+      All_data_trans = fixed_All_data[fixed_All_data$Catagory == "transportation", ]
         st_geometry(All_data_trans) <- All_data_trans$geom
-      All_data_grocery = All_data[All_data$Catagory == "grocery", ]     
+      All_data_grocery = fixed_All_data[fixed_All_data$Catagory == "grocery", ]     
         st_geometry(All_data_grocery) <- All_data_grocery$geom
         names(All_data_meal_w1)
   # looking just at week 1 for meal catagory
@@ -83,35 +83,34 @@ All_data = st_read('/Users/Erica/Library/CloudStorage/OneDrive-EmoryUniversity/E
             size_needed = c(seq(0, 2000, by=200), 2500, 3000, 3500, 4000, 4500, 5000, 5250)
 
        # need to determine color breaks
-            median(All_data_meal$Deaths)
-            min(All_data_meal$Deaths)
-            max(All_data_meal$Deaths)
-            quantile(All_data_meal$Deaths)
-            color_needed = c(0, 500, 1000, 1500, 2000, 2500, 4500, 6500, 8500, 10000,
-                             13000, 16000, 19000, 22000, 25000,50000, 75000, 100000,
-                             500000, 1000000)
+            median(All_data_meal$new_deaths)
+            min(All_data_meal$new_deaths)
+            max(All_data_meal$new_deaths)
+            quantile(All_data_meal$new_deaths)
+            color_needed = c(seq(0,170,20), 250, 500, 1000, 1500, 2000, 5000, 10000, 20000, 50000,
+                             75000,100000)
       
       # removing un-need variables from graphing data
             names(All_data_meal)
             meal_graphing = All_data_meal %>% dplyr::select("week","mean_normalized_visits_by_state_scaling",
-                                                            "Deaths", "geom")
+                                                            "new_deaths", "geom")
             st_geometry(meal_graphing) <- meal_graphing$geom
             
        # making the map
             map_with_data <- base_map +
               tm_shape(meal_graphing) +
-              tm_bubbles(size = "mean_normalized_visits_by_state_scaling", col = "Deaths",
+              tm_bubbles(size = "mean_normalized_visits_by_state_scaling", col = "new_deaths",
                          border.col = "black", border.alpha = .5,
                          style="fixed", breaks = color_needed,
-                         palette=paletteer_dynamic("cartography::turquoise.pal", 20),
+                         palette=paletteer_dynamic("cartography::turquoise.pal", n=20),
                          contrast=1, 
                          title.size="Mean Visits by State Scaling",
                          title.col = "COVID Deaths",
                          sizes.legend=size_needed) +
               tm_facets(along = "week", free.coords = FALSE) +
               tm_layout(legend.outside = TRUE)
-      
-            tmap_animation(map_with_data, "meal_cat.mp4" , delay=100, outer.margins = 0)
+      setwd("/Users/Erica/Desktop/APE_Thesis/Thesis")
+            tmap_animation(map_with_data, "meal_cat.gif" , delay=100, outer.margins = 0)
 
             
             # Animating for all weeks for edu
@@ -134,13 +133,13 @@ All_data = st_read('/Users/Erica/Library/CloudStorage/OneDrive-EmoryUniversity/E
             # removing un-need variables from graphing data
             names(All_data_meal)
             edu_graphing = All_data_edu %>% dplyr::select("week","mean_normalized_visits_by_state_scaling",
-                                                            "Deaths", "geom")
+                                                            "new_deaths", "geom")
             st_geometry(edu_graphing) <- edu_graphing$geom
             
             # making the map
             map_with_data <- base_map +
               tm_shape(edu_graphing) +
-              tm_bubbles(size = "mean_normalized_visits_by_state_scaling", col = "Deaths",
+              tm_bubbles(size = "mean_normalized_visits_by_state_scaling", col = "new_deaths",
                          border.col = "black", border.alpha = .5,
                          style="fixed", breaks = color_needed,
                          palette=paletteer_dynamic("cartography::turquoise.pal", 20),
@@ -164,13 +163,13 @@ All_data = st_read('/Users/Erica/Library/CloudStorage/OneDrive-EmoryUniversity/E
             # removing un-need variables from graphing data
             names(All_data_trans)
             trans_graphing = All_data_trans %>% dplyr::select("week","mean_normalized_visits_by_state_scaling",
-                                                          "Deaths", "geom")
+                                                          "new_deaths", "geom")
             st_geometry(trans_graphing) <- trans_graphing$geom
             
             # making the map
             map_with_data <- base_map +
               tm_shape(trans_graphing) +
-              tm_bubbles(size = "mean_normalized_visits_by_state_scaling", col = "Deaths",
+              tm_bubbles(size = "mean_normalized_visits_by_state_scaling", col = "new_deaths",
                          border.col = "black", border.alpha = .5,
                          style="fixed", breaks = color_needed,
                          palette=paletteer_dynamic("cartography::turquoise.pal", 20),
@@ -195,13 +194,13 @@ All_data = st_read('/Users/Erica/Library/CloudStorage/OneDrive-EmoryUniversity/E
             # removing un-need variables from graphing data
             names(All_data_grocery)
             grocery_graphing = All_data_grocery %>% dplyr::select("week","mean_normalized_visits_by_state_scaling",
-                                                              "Deaths", "geom")
+                                                              "new_deaths", "geom")
             st_geometry(grocery_graphing) <- grocery_graphing$geom
             
             # making the map
             map_with_data <- base_map +
               tm_shape(grocery_graphing) +
-              tm_bubbles(size = "mean_normalized_visits_by_state_scaling", col = "Deaths",
+              tm_bubbles(size = "mean_normalized_visits_by_state_scaling", col = "new_deaths",
                          border.col = "black", border.alpha = .5,
                          style="fixed", breaks = color_needed,
                          palette=paletteer_dynamic("cartography::turquoise.pal", 20),
@@ -213,8 +212,15 @@ All_data = st_read('/Users/Erica/Library/CloudStorage/OneDrive-EmoryUniversity/E
               tm_layout(legend.outside = TRUE)
             
             tmap_animation(map_with_data, "grocery_cat.gif" , delay=100, outer.margins = 0) 
-            
-            
+
+# Looking at deaths based on county population
+  # addding in total pop data from 2020
+            tot_pop = pop_65_plus[, c("countyFIPS", "total_pop")]
+            All_data_w_pop = inner_join(All_data, tot_pop, by = "countyFIPS")
+            All_data_w_pop$deaths_per_1000 = (All_data_w_pop$Deaths / All_data_w_pop$total_pop)*1000
+            All_data_w_pop = All_data_w_pop %>% group_by(countyFIPS, week) %>% 
+              mutate(daily_deaths = c(first(Deaths), diff(Deaths)),
+                     try1 = revcumsum(Deaths))
             
 #specifying which version of python to use
 reticulate::use_python(python = '/Library/Frameworks/Python.framework/Versions/3.11/bin/python3', required = T)
@@ -270,7 +276,27 @@ plt$show()
       guides(fill = guide_colorbar(barwidth = 7, barheight = 1,
                                    title.position = "top", title.hjust = 0.5))
 
+# Fixing the issue of cummilative deaths
+    fix_edu_deaths =  All_data_edu %>%
+      dplyr::select("countyFIPS", "week", "Catagory", "Deaths", "County.Name", "mean_normalized_visits_by_state_scaling")
+
+    fix_edu_deaths$y = ifelse(fix_edu_deaths$week == 1,0, shift(fix_edu_deaths$Deaths, n=1, fill=0, type="lag"))
     
+    fix_edu_deaths$new_deaths = fix_edu_deaths$Deaths - fix_edu_deaths$y
+    # NOTE: Some weeks resulted in an unexpected drop in cumulative deaths (most likely due to miss calculation the week before)
+        # to handel this we are setting these weeks deaths to 0
+    fix_edu_deaths$new_deaths = ifelse(fix_edu_deaths$new_deaths <0,0, fix_edu_deaths$new_deaths)
     
+    fix_edu_deaths =  st_drop_geometry(fix_edu_deaths) %>%
+      dplyr::select("countyFIPS", "week", "new_deaths", )
     
+    # adding new deaths back to all data
+    fixed_All_data = All_data %>% inner_join(fix_edu_deaths, by=c("countyFIPS" = "countyFIPS",  "week" = "week") )
     
+    # Saving
+    write.csv(fixed_All_data, "/Users/Erica/Library/CloudStorage/OneDrive-EmoryUniversity/Erica thesis/fixed_All_data.csv")
+    
+
+
+
+
