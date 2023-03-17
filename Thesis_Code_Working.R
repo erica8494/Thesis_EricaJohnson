@@ -104,7 +104,7 @@ saveRDS(object=data, file="~/Library/CloudStorage/OneDrive-EmoryUniversity/Erica
 
 # Merging Data for all time independent
   # importing GA county name to fips
-      county_fips = read_xlsx("/Users/Erica/Library/CloudStorage/OneDrive-EmoryUniversity/Erica thesis/ga_county_fips.xlsx")%>% mutate(
+      county_fips = read_xlsx("/Users/Erica/Library/CloudStorage/OneDrive-EmoryUniversity/Erica thesis/old/ga_county_fips.xlsx")%>% mutate(
         countyFIPS= substr(fips, 3,5 ),
         stateFIPS = substr(fips,1,2),
         county_name_all_upper = toupper(name)
@@ -113,18 +113,18 @@ saveRDS(object=data, file="~/Library/CloudStorage/OneDrive-EmoryUniversity/Erica
       )
 
   # county median age
-      age = read_xlsx("~/Library/CloudStorage/OneDrive-EmoryUniversity/Erica thesis/median_age_county_2015_to_2019.xlsx") %>%
+      age = read_xlsx("~/Library/CloudStorage/OneDrive-EmoryUniversity/Erica thesis/old/median_age_county_2015_to_2019.xlsx") %>%
        dplyr::filter(state == "Georgia") %>% mutate(
          countyFIPS= substr(fips, 3,5 ),
          stateFIPS = substr(fips,1,2)
           )
   # county household size
-      house_size = read_xlsx("/Users/Erica/Library/CloudStorage/OneDrive-EmoryUniversity/Erica thesis/_Persons per household 2014-2018 - (Average).xlsx")
+      house_size = read_xlsx("/Users/Erica/Library/CloudStorage/OneDrive-EmoryUniversity/Erica thesis/old/_Persons per household 2014-2018 - (Average).xlsx")
         
       house_size = right_join(house_size, county_fips, by = c("County" = "county_name")) %>%
         dplyr::select("County", "Persons per household", "countyFIPS")
   # Urbanicity
-      urbanicity = read_xlsx("/Users/Erica/Library/CloudStorage/OneDrive-EmoryUniversity/Erica thesis/urbanicity.xlsx")%>%
+      urbanicity = read_xlsx("/Users/Erica/Library/CloudStorage/OneDrive-EmoryUniversity/Erica thesis/old/urbanicity.xlsx")%>%
         dplyr::filter(`State Abr.` == "GA") %>% mutate(
           countyFIPS= substr("FIPS code", 3,5 ),
           stateFIPS = substr("FIPS code",1,2)
@@ -142,20 +142,21 @@ saveRDS(object=data, file="~/Library/CloudStorage/OneDrive-EmoryUniversity/Erica
       urbanicity$countyFIPS= substr(urbanicity$`FIPS code`, 3,5 )
       urbanicity$stateFIPS= substr(urbanicity$`FIPS code`, 1,2 )
   # Income
-      income = read_xls("/Users/Erica/Library/CloudStorage/OneDrive-EmoryUniversity/Erica thesis/GA_COUNTY_personal income per capita_2020_prep.xls") %>%
+      income = read_xls("/Users/Erica/Library/CloudStorage/OneDrive-EmoryUniversity/Erica thesis/old/GA_COUNTY_personal income per capita_2020_prep.xls") %>%
         dplyr::filter(LineCode == 3) %>% mutate(
           countyFIPS= substr(GeoFips, 3,5 ),
           stateFIPS = substr(GeoFips,1,2)
         )
   # Pop % 65 and older
-      pop_65_plus = read_xlsx("/Users/Erica/Library/CloudStorage/OneDrive-EmoryUniversity/Erica thesis/ga_county_pop_2020.xlsx") %>%
-        dplyr::select("County", "2020 Population 65 and Over, Percent") 
+      pop_65_plus = read_xlsx("/Users/Erica/Library/CloudStorage/OneDrive-EmoryUniversity/Erica thesis/old/ga_county_pop_2020.xlsx") %>%
+        dplyr::select("County", "2020 Population 65 and Over, Percent", "2020 Total Population") 
       pop_65_plus = right_join(pop_65_plus, county_fips, by = c("County" = "county_name_all_upper")) %>%
-        dplyr::select("County", "2020 Population 65 and Over, Percent", "countyFIPS") %>% rename(
-          pop_65_plus_ratio = `2020 Population 65 and Over, Percent`
+        dplyr::select("County", "2020 Population 65 and Over, Percent", "countyFIPS", "2020 Total Population") %>% rename(
+          pop_65_plus_ratio = `2020 Population 65 and Over, Percent`,
+          total_pop =`2020 Total Population`
         )
   # political affiliation
-      politics = read_xlsx("/Users/Erica/Library/CloudStorage/OneDrive-EmoryUniversity/Erica thesis/Georgia 2020 RLA Report.xlsx") %>%
+      politics = read_xlsx("/Users/Erica/Library/CloudStorage/OneDrive-EmoryUniversity/Erica thesis/old/Georgia 2020 RLA Report.xlsx") %>%
         right_join( county_fips, by = c("County" = "county_name_all_upper")) %>%
         dplyr::select("County", "Trump", "Biden", "Jorgensen","Total", "countyFIPS")
   
@@ -235,9 +236,8 @@ saveRDS(object=data, file="~/Library/CloudStorage/OneDrive-EmoryUniversity/Erica
       countyFIPS= substr(FIPS, 3,5 ),
       Week =as.numeric(gsub("X","",temp$Week) ))
   # Merging
-  time_depentent_data = grouped_data %>% inner_join(temp, by=c("countyFIPS" = "countyFIPS",  "week" = "Week") ) %>% 
-    dplyr::select(-"FIPS")
-  
+  time_depentent_data = grouped_data %>% inner_join(temp, by=c("countyFIPS" = "countyFIPS",  "week" = "Week") )
+  add_race = time_depentent_data %>% inner_join(race_pop_data, by="countyFIPS")
   
   # Saving
   write.csv(time_depentent_data, "/Users/Erica/Library/CloudStorage/OneDrive-EmoryUniversity/Erica thesis/time_depentent_data.csv")

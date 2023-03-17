@@ -6,9 +6,10 @@ pacman::p_load(tidyverse, tidycensus, tigris, sp, sf, tmap, spatstat, sparr, map
 
 # loading data into R
 time_indepentent_data = read.csv("/Users/Erica/Library/CloudStorage/OneDrive-EmoryUniversity/Erica thesis/time_indepentent_data.csv")
-data = readRDS("~/Library/CloudStorage/OneDrive-EmoryUniversity/Erica thesis/weeks_poi_data.RDS")
+data = readRDS("~/Library/CloudStorage/OneDrive-EmoryUniversity/Erica thesis/old/weeks_poi_data.RDS")
 time_depentent_data = read.csv("/Users/Erica/Library/CloudStorage/OneDrive-EmoryUniversity/Erica thesis/time_depentent_data.csv")
 All_data = st_read('/Users/Erica/Library/CloudStorage/OneDrive-EmoryUniversity/Erica thesis/all_data.gpkg') 
+
 
 
 # Graphing the data
@@ -26,6 +27,9 @@ All_data = st_read('/Users/Erica/Library/CloudStorage/OneDrive-EmoryUniversity/E
     df <- scale(graph_time_ind_data)
 
     # Looking at time independent heatmaps
+    dev.off()
+    plot(rnorm(50), rnorm(50))
+    
       heatmap(df, scale = "none")
       
       heatmap.2(df, scale = "none", col = bluered(100), 
@@ -285,10 +289,19 @@ plt$show()
     fix_edu_deaths$new_deaths = fix_edu_deaths$Deaths - fix_edu_deaths$y
     # NOTE: Some weeks resulted in an unexpected drop in cumulative deaths (most likely due to miss calculation the week before)
         # to handel this we are setting these weeks deaths to 0
+    
+    # break up the deaths between this time and the next to get the average deaths between the two weeks for this instead of 0
+    
     fix_edu_deaths$new_deaths = ifelse(fix_edu_deaths$new_deaths <0,0, fix_edu_deaths$new_deaths)
     
-    fix_edu_deaths =  st_drop_geometry(fix_edu_deaths) %>%
-      dplyr::select("countyFIPS", "week", "new_deaths", )
+    fix_deaths =  st_drop_geometry(fix_edu_deaths) %>%
+      dplyr::select("countyFIPS", "week", "new_deaths", "y" )
+    write.csv(fix_deaths, "/Users/Erica/Library/CloudStorage/OneDrive-EmoryUniversity/Erica thesis/Deaths_need_work.csv")
+    
+    total_deaths_county = fix_edu_deaths %>% group_by(countyFIPS) %>% 
+      mutate(
+        total_deaths_FIPS = sum(new_deaths)
+      )
     
     # adding new deaths back to all data
     fixed_All_data = All_data %>% inner_join(fix_edu_deaths, by=c("countyFIPS" = "countyFIPS",  "week" = "week") )
@@ -296,7 +309,35 @@ plt$show()
     # Saving
     write.csv(fixed_All_data, "/Users/Erica/Library/CloudStorage/OneDrive-EmoryUniversity/Erica thesis/fixed_All_data.csv")
     
+# percetage black population in county
+    #B01003_001 total population
+    #B02009_001 total black
+    # retrieving data from census and adding geometry
+    race_pop_data <- get_acs(geography = 'county',
+                         variables = c("B02009_001", "B01003_001"),
+                         year = 2020,
+                         survey = 'acs5') %>%
+      dplyr::select(-moe) %>%
+      as_tibble() %>%
+      pivot_wider(names_from = variable,
+                  values_from = estimate) %>%
+      mutate(perc_b = (B02009_001/B01003_001)*100,
+             pop = B01003_001,
+             countyFIPS= substr(GEOID, 3,5 ),
+             stateFIPS = substr(GEOID,1,2)) %>%
+      dplyr::filter(stateFIPS == "13")
 
+# UPDATING DEATH DATA
+    C_total_deaths = read_excel("/Users/Erica/Library/CloudStorage/OneDrive-EmoryUniversity/Erica thesis/CORRECT_total_deaths.xlsx")   
+    C_weekly_deaths = read_excel("/Users/Erica/Library/CloudStorage/OneDrive-EmoryUniversity/Erica thesis/Correct_Inc_Deaths_GA.xlsx")   
 
-
-
+    temp = C_weekly_deaths %>% 
+      pivot_longer(!countyFIPS, names_to = "Week", values_to = "Deaths")  %>% mutate(
+        Week =as.numeric(gsub("X","",temp$Week) ))
+    
+    
+   # break up the data in waves
+  #  look at the ga splits in the policies'
+    # different regression for different periods
+    # looking to see if there are technical issues in that regression -> by looking at random peroids 
+    
