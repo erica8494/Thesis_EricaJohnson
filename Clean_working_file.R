@@ -309,6 +309,17 @@ map_with_data <- base_map +
 tmap_animation(map_with_data, "grocery_cat.gif" , delay=100, outer.margins = 0) 
 
 ########---------------Regression---------------##############
+# Starting by looking at week 1 and a basic linear regression
+Data_Week1 = complete_data_geo[complete_data_geo$week == 1, ]
+st_geometry(Data_Week1) <- Data_Week1$geom
+names(Data_Week1)
+new = Data_Week1 %>% pivot_wider(names_from = Catagory,
+                                 values_from = c(mean_normalized_visits_by_state_scaling,mean_normalized_visits_by_total_visits,
+                                                 mean_normalized_visits_by_total_visitors, mean_normalized_visits_by_region_naics_visits,
+                                                 mean_normalized_visits_by_region_naics_visitors))
+
+
+
 
 
 
