@@ -1,7 +1,8 @@
 # loading in packages
 pacman::p_load(tidyverse, tidycensus, tigris, sp, sf, tmap, spatstat, sparr, maptools, raster, dplyr, 
                readxl, DCluster, spdep, SpatialEpi, CARBayes, data.table, coda, ggplot2, xlsx, plm,
-               reticulate, gplots, ComplexHeatmap, reshape2, av, gifski, paletteer, cartography, GGally, splm)
+               reticulate, gplots, ComplexHeatmap, reshape2, av, gifski, paletteer, cartography, GGally, splm,
+               purrr, broom)
 
 
 # data to get together
@@ -310,23 +311,79 @@ pacman::p_load(tidyverse, tidycensus, tigris, sp, sf, tmap, spatstat, sparr, map
       
 ########---------------Regression---------------##############
   # Starting by looking at week 1 and a basic linear regression
-      Data_Week1 = complete_data_geo[complete_data_geo$week == 1, ]
-      st_geometry(Data_Week1) <- Data_Week1$geom
-      names(Data_Week1)
-      new = Data_Week1 %>% pivot_wider(names_from = Catagory,
-        values_from = c(mean_normalized_visits_by_state_scaling,mean_normalized_visits_by_total_visits,
-                        mean_normalized_visits_by_total_visitors, mean_normalized_visits_by_region_naics_visits,
-                        mean_normalized_visits_by_region_naics_visitors))
 
+  # re-organizing data
+      # loading in the movememnt long data
+      long_movement = read_xlsx("/Users/Erica/Desktop/APE_Thesis/Thesis/movement_long.xlsx")
+      new_complete = complete_data_geo %>% dplyr::select(-"mean_normalized_visits_by_state_scaling",-"mean_normalized_visits_by_total_visits",
+                                                     -"mean_normalized_visits_by_total_visitors", -"mean_normalized_visits_by_region_naics_visits",
+                                                     -"mean_normalized_visits_by_region_naics_visitors", -"Catagory")
+     
+      lined_data = new_complete %>% inner_join(long_movement, by=c("countyFIPS" = "countyFIPS",  "week" = "week") )
+      
+      lined_data = unique(lined_data)
+      
+      names(complete_data_geo)
+      write_csv(lined_data,"/Users/Erica/Desktop/APE_Thesis/Thesis/complete_lined_data.csv" )
+ 
+  # seperating out week 1
+      Data_Week1 = lined_data[lined_data$week == 1, ]
+      st_geometry(Data_Week1) <- Data_Week1$geom
   
+  # looking at the linear regression
+      raw_linmod = lm(total_deaths_per_1000 ~ education_mean_normalized_visits_by_state_scaling + grocery_mean_normalized_visits_by_state_scaling 
+                      + meal_mean_normalized_visits_by_state_scaling + transportation_mean_normalized_visits_by_state_scaling, 
+                      data = Data_Week1)
+      
+      raw_linmod = lm(total_deaths_per_1000 ~ education_mean_normalized_visits_by_state_scaling + grocery_mean_normalized_visits_by_state_scaling 
+                      + meal_mean_normalized_visits_by_state_scaling + transportation_mean_normalized_visits_by_state_scaling, 
+                      data = Data_Week1)
+      
+      summary(raw_linmod)
+      
+  # looking at each week
+      fit_model <- function(df) lm(total_deaths_per_1000 ~ education_mean_normalized_visits_by_state_scaling + grocery_mean_normalized_visits_by_state_scaling 
+                                   + meal_mean_normalized_visits_by_state_scaling + transportation_mean_normalized_visits_by_state_scaling, 
+                                   data =df)
+      get_slope <- function(mod) tidy(mod)$estimate[2]
+      get_p_value <- function(mod) tidy(mod)$p.value[2]
+      
+      temp = lined_data %>%  nest_by(countyFIPS, week) %>% 
+       mutate(model = list(lm(total_deaths_per_1000 ~ education_mean_normalized_visits_by_state_scaling + grocery_mean_normalized_visits_by_state_scaling 
+                              + meal_mean_normalized_visits_by_state_scaling + transportation_mean_normalized_visits_by_state_scaling, 
+                              data, na.action = na.exclude)))
+      %>% 
+       summarise(tidy(model)) %>% 
+       ungroup()
+      
+      
+      temp = not_geo_lined_data %>%  nest_by(countyFIPS) %>% mutate(model = map(data, fit_model),
+             slope = map_dbl(model, get_slope),
+             p_value = map_dbl(model, get_p_value))
+      not_geo_lined_data = st_drop_geometry(lined_data)
+      
+      # look at the different models with only ONE predictor
+        # need to add back in the map function
+      class(not_geo_lined_data)
+      
+      # run n regressions
+      n = length(lined_data)
+      my_lms <- lapply(1:n, function(x) lm(lined_data$total_deaths_per_1000[x] ~ lined_data$education_mean_normalized_visits_by_state_scaling[x]))
+      # extract information
+      sapply(my_lms, coef)
+      summaries <- lapply(my_lms, summary)
+      # coefficents with p values:
+      lapply(summaries, function(x) x$coefficients[, c(1,4)])
+      # or r-squared values
+      sapply(summaries, function(x) c(r_sq = x$r.squared, 
+                                      adj_r_sq = x$adj.r.squared))
+      
+      
+      NA_data = lined_data[rowSums(is.na(lined_data)) > 0, ]
+      zeroed_data = lined_data[is.na(lined_data)] = 0
+
       
       
       
-      
-      
-      
-      
-      
-      
-      
+    
       
