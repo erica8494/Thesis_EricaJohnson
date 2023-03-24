@@ -362,6 +362,8 @@ pacman::p_load(tidyverse, tidycensus, tigris, sp, sf, tmap, spatstat, sparr, map
              p_value = map_dbl(model, get_p_value))
       not_geo_lined_data = st_drop_geometry(lined_data)
       
+      write_csv(not_geo_lined_data,"/Users/Erica/Desktop/APE_Thesis/Thesis/not_geo_lined_data.csv" )
+      
       # look at the different models with only ONE predictor
         # need to add back in the map function
       class(not_geo_lined_data)
