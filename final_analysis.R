@@ -383,7 +383,192 @@ pacman::p_load(tidyverse, tidycensus, tigris, sp, sf, tmap, spatstat, sparr, map
       
       NA_data = lined_data[rowSums(is.na(lined_data)) > 0, ]
       zeroed_data = lined_data[is.na(lined_data)] = 0
+      
+      # MODELS to run just a linear regression
+      outcome_data = lined_data$new_deaths_per_1000
+      variable_data = lined_data %>% dplyr::select(countyFIPS,week,percap_personal_income_2020,household_size,
+                                                   pop_65_plus_ratio,urban_code_2013,perc_b,perc_trump,new_vac_per_1000,
+                                                   education_mean_normalized_visits_by_state_scaling,
+                                                   grocery_mean_normalized_visits_by_state_scaling,
+                                                   meal_mean_normalized_visits_by_state_scaling,
+                                                   transportation_mean_normalized_visits_by_state_scaling)
+      variable_data = st_drop_geometry(variable_data)
+      full_data_lm=variable_data
+      full_data_lm$new_deaths_per_1000 = outcome_data
+      
+       #Model 1 Simple - all variablesFit the multiple linear regression model
+        model <- lm(new_deaths_per_1000~., data=full_data_lm)
+      
+         # Print the summary of the model results
+           summary(model)      
+      
+      #Model 2 Simple + interaction - all variablesFit the multiple linear regression model
+       model2 <- lm(new_deaths_per_1000~education_mean_normalized_visits_by_state_scaling*countyFIPS + 
+                     grocery_mean_normalized_visits_by_state_scaling*countyFIPS +
+                     meal_mean_normalized_visits_by_state_scaling*countyFIPS+
+                     transportation_mean_normalized_visits_by_state_scaling*countyFIPS+countyFIPS+
+                     week+percap_personal_income_2020+household_size+pop_65_plus_ratio+
+                     urban_code_2013+perc_b+perc_trump+new_vac_per_1000+ education_mean_normalized_visits_by_state_scaling+
+                   grocery_mean_normalized_visits_by_state_scaling+meal_mean_normalized_visits_by_state_scaling+
+                   transportation_mean_normalized_visits_by_state_scaling, data=full_data_lm)
+       
+        # Print the summary of the model results
+           summary(model2)      
+  
+    # Machine Leaning part
+           # splitting the data into train and test
+              set.seed(5)
+              training = sample.split(full_data_lm$new_deaths_per_1000, SplitRatio = 0.8)  
+              train = subset(full_data_lm, training == TRUE)
+              test = subset(full_data_lm, training == FALSE)
+          # Train and build the model 1
+              train_model = lm(new_deaths_per_1000~., data=train)
+              # Print the summary of the model results
+              summary(train_model) 
+              # plotting the residuals
+              res = as.data.frame(residuals(train_model))
+              head(res)
+              res$mod = unlist(res)
+              ggplot(res, aes(res$mod)) + geom_histogram(bins = 100)
+            #look at model
+              plot(train_model)
+          # Looking at the prediction
+              death_predict = predict(train_model,test)
+              results = cbind(death_predict, test$new_deaths_per_1000)
+              colnames(results) = c("predicted", "actual")
+              results = as.data.frame(results)    
+              head(results)
+          # looking at the mean squared error  
+            mse = mean( (results$actual - results$predicted)^2 )
+            print(mse)
+            # root mse
+            print(mse^0.5)
+          # SSE sum of squared error
+            SSE = sum((results$predicted - results$actual)^2)
+          # SST sum of squared total
+            SST = sum ( (mean(full_data_lm$new_deaths_per_1000) - results$actual)^2 )
+          # R^2 is 1 - SSE/SST
+            r2 = 1 - SSE/SST
+           print(r2)
+    # model 2
+           # Train and build the model 2
+           train_model2 = lm(new_deaths_per_1000~education_mean_normalized_visits_by_state_scaling*countyFIPS + 
+                              grocery_mean_normalized_visits_by_state_scaling*countyFIPS +
+                              meal_mean_normalized_visits_by_state_scaling*countyFIPS+
+                              transportation_mean_normalized_visits_by_state_scaling*countyFIPS+countyFIPS+
+                              week+percap_personal_income_2020+household_size+pop_65_plus_ratio+
+                              urban_code_2013+perc_b+perc_trump+new_vac_per_1000+ education_mean_normalized_visits_by_state_scaling+
+                              grocery_mean_normalized_visits_by_state_scaling+meal_mean_normalized_visits_by_state_scaling+
+                              transportation_mean_normalized_visits_by_state_scaling, data=train)
+           # Print the summary of the model results
+           summary(train_model2) 
+           # plotting the residuals
+           res = as.data.frame(residuals(train_model2))
+           head(res)
+           res$mod = unlist(res)
+           ggplot(res, aes(res$mod)) + geom_histogram(bins = 100)
+           #look at model
+           plot(train_model2)
+           # Looking at the prediction
+           death_predict = predict(train_model2,test)
+           results = cbind(death_predict, test$new_deaths_per_1000)
+           colnames(results) = c("predicted", "actual")
+           results = as.data.frame(results)    
+           head(results)
+           # looking at the mean squared error  
+           mse = mean( (results$actual - results$predicted)^2 )
+           print(mse)
+           # root mse
+           print(mse^0.5)
+           # SSE sum of squared error
+           SSE = sum((results$predicted - results$actual)^2)
+           # SST sum of squared total
+           SST = sum ( (mean(full_data_lm$new_deaths_per_1000) - results$actual)^2 )
+           # R^2 is 1 - SSE/SST
+           r2 = 1 - SSE/SST
+           print(r2)
 
+# I think the issue is with scaling so I am going to normalize the predictor variables
+    names(train)
+    # need to just rescale the predictors
+    train[c(1:13)] = lapply(train[c(1:13)], function(x) c(scale(x)))
+    # re-Train and build the model 1
+        train_model = lm(new_deaths_per_1000~., data=train)
+        # Print the summary of the model results
+        summary(train_model) 
+        # plotting the residuals
+        res = as.data.frame(residuals(train_model))
+        head(res)
+        res$mod = unlist(res)
+        ggplot(res, aes(res$mod)) + geom_histogram(bins = 100)
+        #look at model
+        plot(train_model)
+        # Looking at the prediction
+        test[c(1:13)] = lapply(test[c(1:13)], function(x) c(scale(x)))
+        death_predict = predict(train_model,test)
+        results = cbind(death_predict, test$new_deaths_per_1000)
+        colnames(results) = c("predicted", "actual")
+        results = as.data.frame(results)    
+        head(results)
+        # looking at the mean squared error  
+        mse = mean( (results$actual - results$predicted)^2 )
+        print(mse)
+        # root mse
+        print(mse^0.5)
+        # SSE sum of squared error
+        SSE = sum((results$predicted - results$actual)^2)
+        # SST sum of squared total
+        SST = sum ( (mean(full_data_lm$new_deaths_per_1000) - results$actual)^2 )
+        # R^2 is 1 - SSE/SST
+        r2 = 1 - SSE/SST
+        print(r2)
+# we are still getting a low r2 so I am going to reduce the number of cofounders
+        # Train and build the model 3
+        train_model3 = lm(new_deaths_per_1000~week+ education_mean_normalized_visits_by_state_scaling+
+                            grocery_mean_normalized_visits_by_state_scaling+pop_65_plus_ratio+
+                            perc_b+perc_trump+new_vac_per_1000
+                            , data=train)
+        # Print the summary of the model results
+        summary(train_model3) 
+        # plotting the residuals
+        res = as.data.frame(residuals(train_model3))
+        head(res)
+        res$mod = unlist(res)
+        ggplot(res, aes(res$mod)) + geom_histogram(bins = 100)
+# still getting a very low r2 we might need to consider doing a non-linear regression
+        # trying per_b and per_trump as quadrtic terms
+        # Train and build the model 3
+        train_model3 = lm(new_deaths_per_1000~countyFIPS+
+                            week+percap_personal_income_2020+household_size+pop_65_plus_ratio+
+                            urban_code_2013+perc_b^2+perc_trump^2+new_vac_per_1000+ education_mean_normalized_visits_by_state_scaling+
+                            grocery_mean_normalized_visits_by_state_scaling+meal_mean_normalized_visits_by_state_scaling+
+                            transportation_mean_normalized_visits_by_state_scaling, data=train)
+        # Print the summary of the model results
+        summary(train_model3) 
+        # plotting the residuals
+        res = as.data.frame(residuals(train_model3))
+        head(res)
+        res$mod = unlist(res)
+        ggplot(res, aes(res$mod)) + geom_histogram(bins = 100)
+
+# maybe we need to look at a logistic regression           
+      
+           
+           
+           
+           
+           
+           
+           
+           
+           
+           
+           
+           
+           
+           
+           
+           
       
       
       
