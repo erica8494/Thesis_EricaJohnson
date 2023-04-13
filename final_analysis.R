@@ -552,8 +552,477 @@ pacman::p_load(tidyverse, tidycensus, tigris, sp, sf, tmap, spatstat, sparr, map
         ggplot(res, aes(res$mod)) + geom_histogram(bins = 100)
 
 # maybe we need to look at a logistic regression           
-      
+
+                               
+
+
+###------------Changing variables into catagories to simplify--------------------------###  
+
+    # adding in dichtomous variables for both movement and covid deaths
+  
+  names(full_data_lm)
+  
+  # # OUTCOME
+  # # creating two potential new outcomes that are dichotomous
+  # full_data_lm$new_deaths_increase =  c(FALSE, diff(full_data_lm$new_deaths_per_1000) >0)
+  # full_data_lm$deaths_greater_mean = full_data_lm$new_deaths_per_1000 > mean(full_data_lm$new_deaths_per_1000)
+  
+  # PREDICTORS
+  # creating new catagorical predictor variables to simplify data
+  full_data_lm$new_vac_increase =  c(FALSE, diff(full_data_lm$new_vac_per_1000) >0)
+  full_data_lm$new_vac_greater_mean = full_data_lm$new_vac_per_1000 > mean(full_data_lm$new_vac_per_1000)
+  
+    # for movement doing both increase dichotomous variable and a 3 catagory (low, medium, high movement)
+  full_data_lm$edu_movement_increase =  c(FALSE, diff(full_data_lm$education_mean_normalized_visits_by_state_scaling) >0)
+  full_data_lm$education_mean_normalized_visits_by_state_scaling = as.numeric(full_data_lm$education_mean_normalized_visits_by_state_scaling)
+  full_data_lm$edu_movement_cat = cut(full_data_lm$education_mean_normalized_visits_by_state_scaling, 
+                                      breaks = c(-Inf, quantile(full_data_lm$education_mean_normalized_visits_by_state_scaling, probs = c(1/3, 2/3)), Inf), 
+                                      labels = c(0, 1, 2),
+                                      include.lowest = TRUE)
+  class(full_data_lm$education_mean_normalized_visits_by_state_scaling)
+  full_data_lm$grocery_movement_increase =  c(FALSE, diff(full_data_lm$grocery_mean_normalized_visits_by_state_scaling) >0)
+  full_data_lm$grocery_movement_cat = cut(full_data_lm$grocery_mean_normalized_visits_by_state_scaling, 
+                                      breaks = c(-Inf, quantile(full_data_lm$grocery_mean_normalized_visits_by_state_scaling, probs = c(1/3, 2/3)), Inf), 
+                                      labels = c(0, 1, 2))
+  
+  full_data_lm$meal_movement_increase =  c(FALSE, diff(full_data_lm$meal_mean_normalized_visits_by_state_scaling) >0)
+  full_data_lm$meal_movement_cat = cut(full_data_lm$meal_mean_normalized_visits_by_state_scaling, 
+                                          breaks = c(-Inf, quantile(full_data_lm$meal_mean_normalized_visits_by_state_scaling, probs = c(1/3, 2/3)), Inf), 
+                                          labels = c(0, 1, 2))
+
+  # subseting the data into 3 parts, one for dichtomous movement, catagorical movement, and numerical movement
+  full_data_lm_di = full_data_lm[,!names(full_data_lm) %in% c("edu_movement_cat","education_mean_normalized_visits_by_state_scaling","grocery_movement_cat", "grocery_mean_normalized_visits_by_state_scaling",
+                                                              "transportation_mean_normalized_visits_by_state_scaling", "new_vac_increase", "new_vac_greater_mean",
+                                                              "meal_movement_cat","meal_mean_normalized_visits_by_state_scaling"  )]
+  
+  full_data_lm_cat = full_data_lm[,!names(full_data_lm) %in% c("edu_movement_increase","education_mean_normalized_visits_by_state_scaling","grocery_movement_increase", "grocery_mean_normalized_visits_by_state_scaling",
+                                                               "transportation_mean_normalized_visits_by_state_scaling", "new_vac_increase", "new_vac_greater_mean",
+                                                               "meal_movement_increase","meal_mean_normalized_visits_by_state_scaling"  )]
+  full_data_lm_num = full_data_lm[,!names(full_data_lm) %in% c("edu_movement_cat","edu_movement_increase","grocery_movement_cat", "grocery_movement_increase",
+                                                               "transportation_mean_normalized_visits_by_state_scaling", "new_vac_increase", "new_vac_greater_mean",
+                                                               "meal_movement_cat","meal_movement_increase"  )]
+  
+  
+  write_csv(full_data_lm,"/Users/Erica/Desktop/APE_Thesis/Thesis/not_geo_lined_data.csv" )
+  
+###-------------Trying to look at time series--------------------------###
+  
+  names(full_data_lm)
+  
+  # MOVEMENT 1: dichotomous movement
+    full_data_lm_di$week_num = full_data_lm_di$week
+
+    full_data_lm_di$week <- as.Date(paste0("2020-03-23"), format = "%Y-%m-%d") + weeks(full_data_lm_di$week_num - 1)
+
+    # Split the data frame by countyFIPS
+    full_data_lm_di_list <- full_data_lm_di %>% split(.$countyFIPS)
+
+    # Loop through each data frame and convert to a time series object
+    ts_list_di <- lapply(full_data_lm_di_list, function(x) {
+      ts(x[, -c(1, 2)], start = min(x$week), frequency = 1)
+    })
+    
+    # MOVEMENT 2: CATAGORICAL movement
+    full_data_lm_cat$week_num = full_data_lm_cat$week
+    
+    full_data_lm_cat$week <- as.Date(paste0("2020-03-23"), format = "%Y-%m-%d") + weeks(full_data_lm_cat$week_num - 1)
+    
+    # Split the data frame by countyFIPS
+    full_data_lm_cat_list <- full_data_lm_cat %>% split(.$countyFIPS)
+    
+    # Loop through each data frame and convert to a time series object
+    ts_list_cat <- lapply(full_data_lm_cat_list, function(x) {
+      ts(x[, -c(1, 2)], start = min(x$week), frequency = 1)
+    })
+    
+    # MOVEMENT 3: numeric movement
+    full_data_lm_num$week_num = full_data_lm_num$week
+    
+    full_data_lm_num$week <- as.Date(paste0("2020-03-23"), format = "%Y-%m-%d") + weeks(full_data_lm_num$week_num - 1)
+    
+    # Split the data frame by countyFIPS
+    full_data_lm_num_list <- full_data_lm_num %>% split(.$countyFIPS)
+    
+    # Loop through each data frame and convert to a time series object
+    ts_list_num <- lapply(full_data_lm_num_list, function(x) {
+      ts(x[, -c(1, 2)], start = min(x$week), frequency = 1)
+    })
+
+###------------Machine Learning Splits--------------------------###
+    # splitting the data into train and test
+    # we are doing this by location to keep time series data together
+    set.seed(5)
+    
+    location_data = full_data_lm %>% group_by(countyFIPS)
+    
+    # training = 80% of our counties and testing = 20% of our counties
+    unique_counties = unique(full_data_lm$countyFIPS)
+    training = sample.split(unique_counties, SplitRatio = 0.8)  
+    county_split = data.frame(unique_counties, training)
+    test_list_counties = subset(county_split, training == FALSE)
+    train_list_counties = subset(county_split, training == TRUE)
+    
+    
+  # MOVEMENT 1: dichotomous movement
+    test_list = ts_list_di[c(test_list_counties$unique_counties)]
+    test_list_di = Filter(Negate(is.null), test_list)
+    train_list = ts_list_di[c(train_list_counties$unique_counties)]
+    train_list_di = Filter(Negate(is.null), train_list)
+    
+    
+  # MOVEMENT 2: CATAGORICAL movement
+    test_list = ts_list_cat[c(test_list_counties$unique_counties)]
+    test_list_cat = Filter(Negate(is.null), test_list)
+    train_list = ts_list_cat[c(train_list_counties$unique_counties)]
+    train_list_cat = Filter(Negate(is.null), train_list)
+    
+    
+  # MOVEMENT 3: numeric movement
+    test_list = ts_list_num[c(test_list_counties$unique_counties)]
+    test_list_num = Filter(Negate(is.null), test_list)
+    train_list = ts_list_num[c(train_list_counties$unique_counties)]
+    train_list_num = Filter(Negate(is.null), train_list)
+
+###------------Gradient Boosted Trees (GBT) Model--------------------------###
+    
+    ###------------MOVEMENT 1: dichotomous movement--------------------------###   
+    # total weeks
+    n_steps = 106
+    
+    ## Convert the time series data to a list of data frames
+    train_df = do.call(rbind, lapply(train_list_di, as.data.frame))
+    test_df = do.call(rbind, lapply(test_list_di, as.data.frame))
+    
+    # Create outcome variable vector
+    train_list_di = lapply(train_list_di, function(x) as.data.frame(x))
+    train_y = sapply(train_list_di, function(x) x$new_deaths_per_1000)
+    test_list_di = lapply(test_list_di, function(x) as.data.frame(x))
+    test_y = sapply(test_list_di, function(x) x$new_deaths_per_1000)
+    test_y = do.call(rbind, lapply(test_y, as.data.frame))
+    
+    test_y = data.matrix(test_y)
+    
+    
+    # Create input variable matrix
+    train_x = data.matrix(train_df[, !(names(train_df) %in% "new_deaths_per_1000")])
+    test_x = data.matrix(test_df[, !(names(train_df) %in% "new_deaths_per_1000")])
+    
+    # Train GBT model
+    model <- xgboost(data = train_x, label = train_y, nrounds = 50)
+    
+    # Make predictions on test set
+    pred <- predict(model, test_x)
+    
+    # Evaluate model performance
+    cor(test_y, pred)
+    
+    #  evaluate the performance of the Gradient Boosted Trees (GBT) model
+    
+    mae = as.data.frame(abs(test_y - pred))
+    mse = as.matrix(((test_y - pred)^2))
+    mape = as.matrix((abs((test_y - pred)/test_y)))
+    
+    results$mae = as.numeric(results$mae)
+    results$mse = as.numeric(mse)
+    results$mape = as.numeric(mape)
+    
+    
+    
+    # Calculate the mean absolute error (MAE)
+    mae = mean(results$mae)
+    
+    # Calculate the root mean squared error (RMSE)
+    rmse = sqrt(mean(results$mse))
+    
+    # Calculate the mean absolute percentage error (MAPE)
+    mape = mean(results$mape)*100
+    
+    # Calculate the coefficient of determination (R-squared)
+    r_squared = cor(test_y, pred)^2
+    
+    # Print the evaluation metrics
+    cat("MAE:", mae, "\n")
+    cat("RMSE:", rmse, "\n")
+    cat("MAPE:", mape, "\n")
+    cat("R-squared:", r_squared, "\n")
+    
+    # moderate preformance of the model
+    #  R-squared of 0.6173938, it means that 60.67% of the variability in the mortality data can be explained by the GBT model
+    #  MAE value of 0.7867125, on average, the model's predictions for mortality deviate from the true mortality values by 0.7867125 units
+    #  RMSE value of 1.271944 means that the root mean squared error of the model's predictions is 1.271944 units.
+    
+    
+    ###------------MOVEMENT 2: CATAGORICAL movement--------------------------###   
+    # total weeks
+    n_steps = 106
+    
+    ## Convert the time series data to a list of data frames
+    train_df = do.call(rbind, lapply(train_list_cat, as.data.frame))
+    test_df = do.call(rbind, lapply(test_list_cat, as.data.frame))
+    
+    # Create outcome variable vector
+    train_list_cat = lapply(train_list_cat, function(x) as.data.frame(x))
+    train_y = sapply(train_list_cat, function(x) x$new_deaths_per_1000)
+    test_list_cat = lapply(test_list_cat, function(x) as.data.frame(x))
+    test_y = sapply(test_list_cat, function(x) x$new_deaths_per_1000)
+    test_y = do.call(rbind, lapply(test_y, as.data.frame))
+    
+    test_y = data.matrix(test_y)
+    
+    
+    # Create input variable matrix
+    train_x = data.matrix(train_df[, !(names(train_df) %in% "new_deaths_per_1000")])
+    test_x = data.matrix(test_df[, !(names(train_df) %in% "new_deaths_per_1000")])
+    
+    # Train GBT model
+    model <- xgboost(data = train_x, label = train_y, nrounds = 50)
+    
+    # Make predictions on test set
+    pred <- predict(model, test_x)
+    
+    # Evaluate model performance
+    cor(test_y, pred)
+    
+    #  evaluate the performance of the Gradient Boosted Trees (GBT) model
+    
+    mae = as.data.frame(abs(test_y - pred))
+    mse = as.matrix(((test_y - pred)^2))
+    mape = as.matrix((abs((test_y - pred)/test_y)))
+    
+    results$mae = as.numeric(results$mae)
+    results$mse = as.numeric(mse)
+    results$mape = as.numeric(mape)
+    
+    
+    
+    # Calculate the mean absolute error (MAE)
+    mae = mean(results$mae)
+    
+    # Calculate the root mean squared error (RMSE)
+    rmse = sqrt(mean(results$mse))
+    
+    # Calculate the mean absolute percentage error (MAPE)
+    mape = mean(results$mape)*100
+    
+    # Calculate the coefficient of determination (R-squared)
+    r_squared = cor(test_y, pred)^2
+    
+    # Print the evaluation metrics
+    cat("MAE:", mae, "\n")
+    cat("RMSE:", rmse, "\n")
+    cat("MAPE:", mape, "\n")
+    cat("R-squared:", r_squared, "\n")
+    
+    # moderate performance of the model
+    #  R-squared of 0.6028941, it means that 60.67% of the variability in the mortality data can be explained by the GBT model
+    #  MAE value of 0.7867125, on average, the model's predictions for mortality deviate from the true mortality values by 0.7867 units
+    #  RMSE value of 1.317372 means that the root mean squared error of the model's predictions is 1.3446 units.
+    
+    
+    ###------------MOVEMENT 3: numeric movement--------------------------###   
+    # total weeks
+    n_steps = 106
+    
+    ## Convert the time series data to a list of data frames
+    train_df = do.call(rbind, lapply(train_list_num, as.data.frame))
+    test_df = do.call(rbind, lapply(test_list_num, as.data.frame))
+    
+    # Create outcome variable vector
+    train_list_num = lapply(train_list_num, function(x) as.data.frame(x))
+    train_y = sapply(train_list_num, function(x) x$new_deaths_per_1000)
+    test_list_num = lapply(test_list_num, function(x) as.data.frame(x))
+    test_y = sapply(test_list_num, function(x) x$new_deaths_per_1000)
+    test_y = do.call(rbind, lapply(test_y, as.data.frame))
+    
+    test_y = data.matrix(test_y)
+    
+    
+    # Create input variable matrix
+    train_x = data.matrix(train_df[, !(names(train_df) %in% "new_deaths_per_1000")])
+    test_x = data.matrix(test_df[, !(names(train_df) %in% "new_deaths_per_1000")])
+    
+    # Train GBT model
+    model <- xgboost(data = train_x, label = train_y, nrounds = 50)
+    
+    # Make predictions on test set
+    pred <- predict(model, test_x)
+    
+    # Evaluate model performance
+    cor(test_y, pred)
+    
+    #  evaluate the performance of the Gradient Boosted Trees (GBT) model
+    
+        mae = as.data.frame(abs(test_y - pred))
+        mse = as.matrix(((test_y - pred)^2))
+        mape = as.matrix((abs((test_y - pred)/test_y)))
+        
+        results$mae = as.numeric(results$mae)
+        results$mse = as.numeric(mse)
+        results$mape = as.numeric(mape)
+        
+        
+        
+        # Calculate the mean absolute error (MAE)
+        mae = mean(results$mae)
+        
+        # Calculate the root mean squared error (RMSE)
+        rmse = sqrt(mean(results$mse))
+        
+        # Calculate the mean absolute percentage error (MAPE)
+        mape = mean(results$mape)*100
+        
+        # Calculate the coefficient of determination (R-squared)
+        r_squared = cor(test_y, pred)^2
+        
+        # Print the evaluation metrics
+        cat("MAE:", mae, "\n")
+        cat("RMSE:", rmse, "\n")
+        cat("MAPE:", mape, "\n")
+        cat("R-squared:", r_squared, "\n")
+        
+  # moderate preformance of the model
+        #  R-squared of 0.6067, it means that 60.67% of the variability in the mortality data can be explained by the GBT model
+        #  MAE value of 0.7867, on average, the model's predictions for mortality deviate from the true mortality values by 0.7867 units
+        #  RMSE value of 1.3446 means that the root mean squared error of the model's predictions is 1.3446 units.
+    
+###------------reason to remove transportation movement--------------------------###
+length(unique(All_data_edu$countyFIPS))
+length(unique(All_data_grocery$countyFIPS))
+length(unique(All_data_meal$countyFIPS))
+length(unique(All_data_trans$countyFIPS))
+
+# decided to not include transportation since this only had 45 conties information out of the 159, making it not generlizable
+
+  names(full_data_lm_num)
+    
            
+use_condaenv("r-reticulate", required = TRUE)
+
+###------------linear models--------------------------###
+# MOVEMENT 1: dichotomous movement
+names(full_data_lm_di)
+    # models
+    model_simple <- lm(new_deaths_per_1000~ edu_movement_increase + 
+                         grocery_movement_increase +meal_movement_increase, data=full_data_lm_di)
+    model_full <- lm(new_deaths_per_1000~., data=full_data_lm_di)
+    
+    # Print model summary
+    summary(model_simple)   
+    summary(model_full)
+
+# MOVEMENT 2: CATAGORICAL movement
+    # models
+    model_simple <- lm(new_deaths_per_1000~ education_mean_normalized_visits_by_state_scaling + 
+                         grocery_mean_normalized_visits_by_state_scaling +meal_mean_normalized_visits_by_state_scaling, data=full_data_lm_cat)
+    model_full <- lm(new_deaths_per_1000~., data=full_data_lm_cat)
+    
+    # Print model summary
+    summary(model_simple)   
+    summary(model_full)
+
+
+
+# MOVEMENT 3: numeric movement
+      # models
+      model_simple <- lm(new_deaths_per_1000~ education_mean_normalized_visits_by_state_scaling + 
+                           grocery_mean_normalized_visits_by_state_scaling +meal_mean_normalized_visits_by_state_scaling, data=full_data_lm_num)
+      model_full <- lm(new_deaths_per_1000~., data=full_data_lm_num)
+      
+      # Print model summary
+      summary(model_simple)   
+      summary(model_full)
+
+      
+###------------Creating histograms of covid deaths with lines of movement--------------------------###
+names(full_data_lm)
+# reading in county names by fips
+county_names = read_xlsx("/Users/Erica/Library/CloudStorage/OneDrive-EmoryUniversity/Erica thesis/Old/ga_county_fips.xlsx") %>% mutate(countyFIPS= as.numeric(substr(fips, 3,5 )))
+
+ # first removing un needed variable
+    graphing_epi_curves = full_data_lm[, (names(full_data_lm) %in% c("countyFIPS", "week", "new_vac_per_1000", "education_mean_normalized_visits_by_state_scaling",
+                                                                 "grocery_mean_normalized_visits_by_state_scaling", "meal_mean_normalized_visits_by_state_scaling",
+                                                                 "transportation_mean_normalized_visits_by_state_scaling", "new_deaths_per_1000"))]
+
+    graphing_epi_curves = graphing_epi_curves %>% inner_join(county_names, by="countyFIPS")
+# # Since we want to have the movement variables on the same graph of the histogram we are going to scale these values to have a mean of 5 which should allow for this
+ #    # selecting columns to be scaled
+ #    cols_to_scale <- c("education_mean_normalized_visits_by_state_scaling", "grocery_mean_normalized_visits_by_state_scaling", 
+ #                       "meal_mean_normalized_visits_by_state_scaling", "transportation_mean_normalized_visits_by_state_scaling")
+ #    
+ #    mean_values = c(2763.736/15, 2046.341/15,1557.766/15, 503.4439/15)
+ #    # scale the selected columns to the arbitrary value of 15
+ #    graphing_epi_curves[, cols_to_scale] = scale(graphing_epi_curves[, cols_to_scale], center = TRUE, scale = mean_values)
+
+ # changing the week variable from numeric to a date
+    graphing_epi_curves$week_num = graphing_epi_curves$week
+    graphing_epi_curves$week <- as.Date(paste0("2020-03-23"), format = "%Y-%m-%d") + weeks(graphing_epi_curves$week_num - 1)
+    
+ # changing the dataframe into a list of data frames:
+    graphing_epi_curves = graphing_epi_curves %>% split(.$name)
+
+ # creating a function to show a histogram of deaths over time with the 4 movement lines to be used for each df in list
+    create_hist <- function(df) {
+      ggplot(df, aes(x = week, y = new_deaths_per_1000), labs=FALSE) +
+        geom_histogram(stat="identity", fill="gray45") +
+        scale_x_date(date_breaks = "1 week") +
+        geom_smooth(aes(x = week, y = education_mean_normalized_visits_by_state_scaling * max(new_deaths_per_1000) / max(education_mean_normalized_visits_by_state_scaling)), method = "loess", formula = y ~ x, color = "blue") +
+        geom_smooth(aes(x = week, y = grocery_mean_normalized_visits_by_state_scaling * max(new_deaths_per_1000) / max(grocery_mean_normalized_visits_by_state_scaling)), method = "loess", formula = y ~ x, color = "red")+
+        geom_smooth(aes(x = week, y = transportation_mean_normalized_visits_by_state_scaling * max(new_deaths_per_1000) / max(transportation_mean_normalized_visits_by_state_scaling)), method = "loess", formula = y ~ x, color = "green")+
+        geom_smooth(aes(x = week, y = new_vac_per_1000 * max(new_deaths_per_1000) / max(new_vac_per_1000)),method = "loess", formula = y ~ x, color = "purple")+
+        labs(title = "name", y = "New Deaths", x = "Dates")
+    }
+
+    # use lapply to create a list of histograms for each dataframe
+    hist_list = lapply(graphing_epi_curves, create_hist)
+    
+    
+    # titles are not correct so we are going to update that
+      update_hist_titles <- function(plot_list, names_vec) {
+        # Update the titles of each plot
+        for (i in seq_along(plot_list)) {
+          plot_list[[i]] <- plot_list[[i]] +
+            ggtitle(names_vec[i])
+        }
+        
+        return(plot_list)
+      }
+    
+    
+    # making the chnage
+    updated_hist_list <- update_hist_titles(hist_list, county_names$name)
+    
+
+    # Split the list of plots into batches of 25
+    plot_batches = split(updated_hist_list, ceiling(seq_along(hist_list)/9))
+    
+    # Loop over each batch of plots and display the histograms in a 5 by 5 grid
+    for (i in seq_along(plot_batches)) {
+      grid.arrange(grobs = plot_batches[[i]], ncol = 3)
+    }
+    
+    
+top_counties = c("Fulton", "Gwinnett", "Cobb", "DeKalb", "Clayton", "Chatham", "Richmond", "Hall", "Muscogee")
+bottom_counties = c("Calhoun", "Chattahoochee", "Baker", "Echols", "Schley", "Webster", "Clay", "Quitman", "Taliaferro")
+
+top_hist = updated_hist_list[top_counties]
+grid.arrange(
+  top_hist[[1]], top_hist[[2]], top_hist[[3]],
+  top_hist[[4]], top_hist[[5]], top_hist[[6]],
+  top_hist[[7]], top_hist[[8]], top_hist[[9]],
+  nrow = 3
+)
+
+bottom_hist = updated_hist_list[bottom_counties]
+grid.arrange(
+  bottom_hist[[1]], bottom_hist[[2]], bottom_hist[[3]],
+  bottom_hist[[4]], bottom_hist[[5]], bottom_hist[[6]],
+  bottom_hist[[7]], bottom_hist[[8]], bottom_hist[[9]],
+  nrow = 3
+)
+
+
+
+    
            
            
            
