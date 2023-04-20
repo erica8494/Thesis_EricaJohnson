@@ -2,7 +2,8 @@
 pacman::p_load(tidyverse, tidycensus, tigris, sp, sf, tmap, spatstat, sparr, maptools, raster, dplyr, 
                readxl, DCluster, spdep, SpatialEpi, CARBayes, data.table, coda, ggplot2, xlsx, plm,
                reticulate, gplots, ComplexHeatmap, reshape2, av, gifski, paletteer, cartography, GGally, splm,
-               purrr, broom)
+               purrr, broom, caTools, forecast, caret, lubridate, zoo, keras, tensorflow, xgboost, Metrics, gridExtra,
+               pROC, VWPre, tibble, cowplot, ALEPlot, iml)
 
 
 # data to get together
@@ -111,7 +112,8 @@ pacman::p_load(tidyverse, tidycensus, tigris, sp, sf, tmap, spatstat, sparr, map
       # saving the geo with data
       st_write(complete_data_geo, "/Users/Erica/Library/CloudStorage/OneDrive-EmoryUniversity/Erica thesis/complete_data_geo.gpkg")
       
-     
+     complete_data = read_csv("/Users/Erica/Library/CloudStorage/OneDrive-EmoryUniversity/Erica thesis/complete_data.csv")
+     names(complete_data)
       
 # GRAPHING 
     # heat maping
@@ -325,6 +327,7 @@ pacman::p_load(tidyverse, tidycensus, tigris, sp, sf, tmap, spatstat, sparr, map
       
       names(complete_data_geo)
       write_csv(lined_data,"/Users/Erica/Desktop/APE_Thesis/Thesis/complete_lined_data.csv" )
+  
  
   # seperating out week 1
       Data_Week1 = lined_data[lined_data$week == 1, ]
@@ -352,10 +355,10 @@ pacman::p_load(tidyverse, tidycensus, tigris, sp, sf, tmap, spatstat, sparr, map
        mutate(model = list(lm(total_deaths_per_1000 ~ education_mean_normalized_visits_by_state_scaling + grocery_mean_normalized_visits_by_state_scaling 
                               + meal_mean_normalized_visits_by_state_scaling + transportation_mean_normalized_visits_by_state_scaling, 
                               data, na.action = na.exclude)))
-      %>% 
-       summarise(tidy(model)) %>% 
-       ungroup()
-      
+      # %>% 
+      summarise(tidy(model)) %>% 
+      #  ungroup()
+      # 
       
       temp = not_geo_lined_data %>%  nest_by(countyFIPS) %>% mutate(model = map(data, fit_model),
              slope = map_dbl(model, get_slope),
@@ -363,6 +366,7 @@ pacman::p_load(tidyverse, tidycensus, tigris, sp, sf, tmap, spatstat, sparr, map
       not_geo_lined_data = st_drop_geometry(lined_data)
       
       write_csv(not_geo_lined_data,"/Users/Erica/Desktop/APE_Thesis/Thesis/not_geo_lined_data.csv" )
+      
       
       # look at the different models with only ONE predictor
         # need to add back in the map function
@@ -383,6 +387,7 @@ pacman::p_load(tidyverse, tidycensus, tigris, sp, sf, tmap, spatstat, sparr, map
       
       NA_data = lined_data[rowSums(is.na(lined_data)) > 0, ]
       zeroed_data = lined_data[is.na(lined_data)] = 0
+
       
       # MODELS to run just a linear regression
       outcome_data = lined_data$new_deaths_per_1000
@@ -401,6 +406,12 @@ pacman::p_load(tidyverse, tidycensus, tigris, sp, sf, tmap, spatstat, sparr, map
       
          # Print the summary of the model results
            summary(model)      
+           
+           # plotting the residuals
+           res = as.data.frame(residuals(model))
+           head(res)
+           res$mod = unlist(res)
+           ggplot(res, aes(res$mod)) + geom_histogram(bins = 100)
       
       #Model 2 Simple + interaction - all variablesFit the multiple linear regression model
        model2 <- lm(new_deaths_per_1000~education_mean_normalized_visits_by_state_scaling*countyFIPS + 
@@ -551,9 +562,43 @@ pacman::p_load(tidyverse, tidycensus, tigris, sp, sf, tmap, spatstat, sparr, map
         res$mod = unlist(res)
         ggplot(res, aes(res$mod)) + geom_histogram(bins = 100)
 
-# maybe we need to look at a logistic regression           
+# looking at a week lag
+        
+    # Create lagged variables for the exposure variables
+        full_data_lm$edu_lag <- lag(full_data_lm$education_mean_normalized_visits_by_state_scaling, 4)
+        full_data_lm$trans_lag <- lag(full_data_lm$transportation_mean_normalized_visits_by_state_scaling, 4)
+        full_data_lm$meal_lag <- lag(full_data_lm$meal_mean_normalized_visits_by_state_scaling, 4)
+        full_data_lm$grocery_lag <- lag(full_data_lm$grocery_mean_normalized_visits_by_state_scaling, 4)
+  model4 <- lm(new_deaths_per_1000~countyFIPS+
+                 week+percap_personal_income_2020+household_size+pop_65_plus_ratio+
+                 urban_code_2013+perc_b+perc_trump+new_vac_per_1000+ edu_lag + trans_lag+
+                 meal_lag + grocery_lag, data=full_data_lm)
+  
+  # Print the summary of the model results
+  summary(model4)       
+           
+           
+  fit_model <- function(temp) lm(total_deaths_per_1000 ~ education_mean_normalized_visits_by_state_scaling, data =temp)
+  get_slope <- function(mod) tidy(mod)$estimate[2]
+  get_p_value <- function(mod) tidy(mod)$p.value[2]
+  
+  
+  
+  not_geo_lined_data %>%  dplyr::group_nest(countyFIPS) %>%
+    
+    mutate(model = map(data, fit_model),
+           
+           slope = map_dbl(model, get_slope),
+           
+           p_value = map_dbl(model, get_p_value))
+           
+# restict to specific pandemic waves 
+    # look at the summer 2020 wave (May-August) -> case and mobility are increasing
+    # log of outcome
+  # logistic regression but have the threshold (look at the data) to see what the best cut 
+  
+  # plot the exposure and outcome overtime
 
-                               
 
 
 ###------------Changing variables into catagories to simplify--------------------------###  
@@ -576,19 +621,23 @@ pacman::p_load(tidyverse, tidycensus, tigris, sp, sf, tmap, spatstat, sparr, map
   full_data_lm$edu_movement_increase =  c(FALSE, diff(full_data_lm$education_mean_normalized_visits_by_state_scaling) >0)
   full_data_lm$education_mean_normalized_visits_by_state_scaling = as.numeric(full_data_lm$education_mean_normalized_visits_by_state_scaling)
   full_data_lm$edu_movement_cat = cut(full_data_lm$education_mean_normalized_visits_by_state_scaling, 
-                                      breaks = c(-Inf, quantile(full_data_lm$education_mean_normalized_visits_by_state_scaling, probs = c(1/3, 2/3)), Inf), 
-                                      labels = c(0, 1, 2),
+                                      breaks = c(-Inf, quantile(full_data_lm$education_mean_normalized_visits_by_state_scaling, probs = c(1/3, 2/3), na.rm = TRUE), Inf), 
+                                      labels = c("low", "medium", "high"),
                                       include.lowest = TRUE)
+  full_data_lm$edu_movement_cat = as.factor(full_data_lm$edu_movement_cat)
+  
   class(full_data_lm$education_mean_normalized_visits_by_state_scaling)
   full_data_lm$grocery_movement_increase =  c(FALSE, diff(full_data_lm$grocery_mean_normalized_visits_by_state_scaling) >0)
   full_data_lm$grocery_movement_cat = cut(full_data_lm$grocery_mean_normalized_visits_by_state_scaling, 
-                                      breaks = c(-Inf, quantile(full_data_lm$grocery_mean_normalized_visits_by_state_scaling, probs = c(1/3, 2/3)), Inf), 
-                                      labels = c(0, 1, 2))
+                                      breaks = c(-Inf, quantile(full_data_lm$grocery_mean_normalized_visits_by_state_scaling, probs = c(1/3, 2/3), na.rm = TRUE), Inf), 
+                                      labels = c("low", "medium", "high"))
+  full_data_lm$grocery_movement_cat = as.factor(full_data_lm$grocery_movement_cat)
   
   full_data_lm$meal_movement_increase =  c(FALSE, diff(full_data_lm$meal_mean_normalized_visits_by_state_scaling) >0)
   full_data_lm$meal_movement_cat = cut(full_data_lm$meal_mean_normalized_visits_by_state_scaling, 
-                                          breaks = c(-Inf, quantile(full_data_lm$meal_mean_normalized_visits_by_state_scaling, probs = c(1/3, 2/3)), Inf), 
-                                          labels = c(0, 1, 2))
+                                          breaks = c(-Inf, quantile(full_data_lm$meal_mean_normalized_visits_by_state_scaling, probs = c(1/3, 2/3), na.rm = TRUE), Inf), 
+                                          labels = c("low", "medium", "high"))
+  full_data_lm$meal_movement_cat = as.factor(full_data_lm$meal_movement_cat)
 
   # subseting the data into 3 parts, one for dichtomous movement, catagorical movement, and numerical movement
   full_data_lm_di = full_data_lm[,!names(full_data_lm) %in% c("edu_movement_cat","education_mean_normalized_visits_by_state_scaling","grocery_movement_cat", "grocery_mean_normalized_visits_by_state_scaling",
@@ -598,10 +647,18 @@ pacman::p_load(tidyverse, tidycensus, tigris, sp, sf, tmap, spatstat, sparr, map
   full_data_lm_cat = full_data_lm[,!names(full_data_lm) %in% c("edu_movement_increase","education_mean_normalized_visits_by_state_scaling","grocery_movement_increase", "grocery_mean_normalized_visits_by_state_scaling",
                                                                "transportation_mean_normalized_visits_by_state_scaling", "new_vac_increase", "new_vac_greater_mean",
                                                                "meal_movement_increase","meal_mean_normalized_visits_by_state_scaling"  )]
+  
   full_data_lm_num = full_data_lm[,!names(full_data_lm) %in% c("edu_movement_cat","edu_movement_increase","grocery_movement_cat", "grocery_movement_increase",
                                                                "transportation_mean_normalized_visits_by_state_scaling", "new_vac_increase", "new_vac_greater_mean",
                                                                "meal_movement_cat","meal_movement_increase"  )]
   
+  # subsetting the data for simple models with only outcome and movement
+  full_data_lm_di_simp = full_data_lm[,names(full_data_lm) %in% c("edu_movement_increase", "grocery_movement_increase", "meal_movement_increase", "new_deaths_per_1000", "week", "countyFIPS" )]
+  
+  full_data_lm_cat_simp = full_data_lm[,names(full_data_lm) %in% c("edu_movement_cat", "grocery_movement_cat", "meal_movement_cat", "new_deaths_per_1000", "week" , "countyFIPS")]
+  
+  full_data_lm_num_simp = full_data_lm[,names(full_data_lm) %in% c("education_mean_normalized_visits_by_state_scaling", "grocery_mean_normalized_visits_by_state_scaling",
+                                                                   "meal_mean_normalized_visits_by_state_scaling", "new_deaths_per_1000","week", "countyFIPS" )]
   
   write_csv(full_data_lm,"/Users/Erica/Desktop/APE_Thesis/Thesis/not_geo_lined_data.csv" )
   
@@ -611,40 +668,71 @@ pacman::p_load(tidyverse, tidycensus, tigris, sp, sf, tmap, spatstat, sparr, map
   
   # MOVEMENT 1: dichotomous movement
     full_data_lm_di$week_num = full_data_lm_di$week
-
-    full_data_lm_di$week <- as.Date(paste0("2020-03-23"), format = "%Y-%m-%d") + weeks(full_data_lm_di$week_num - 1)
+    full_data_lm_di$week = as.Date(paste0("2020-03-23"), format = "%Y-%m-%d") + weeks(full_data_lm_di$week_num - 1)
+    
+    full_data_lm_di_simp$week_num = full_data_lm_di_simp$week
+    full_data_lm_di_simp$week = as.Date(paste0("2020-03-23"), format = "%Y-%m-%d") + weeks(full_data_lm_di_simp$week_num - 1)
+    
+    full_data_lm_di$new_vac_per_1000 = lag(full_data_lm_di$new_vac_per_1000, 2)
 
     # Split the data frame by countyFIPS
     full_data_lm_di_list <- full_data_lm_di %>% split(.$countyFIPS)
-
+    full_data_lm_di_simp_list <- full_data_lm_di_simp %>% split(.$countyFIPS)
+    
     # Loop through each data frame and convert to a time series object
     ts_list_di <- lapply(full_data_lm_di_list, function(x) {
       ts(x[, -c(1, 2)], start = min(x$week), frequency = 1)
     })
     
-    # MOVEMENT 2: CATAGORICAL movement
-    full_data_lm_cat$week_num = full_data_lm_cat$week
+    ts_list_di_simp <- lapply(full_data_lm_di_simp_list, function(x) {
+      ts(x[, -c(1, 2)], start = min(x$week), frequency = 1)
+    })   
     
+  # MOVEMENT 2: CATAGORICAL movement
+    full_data_lm_cat$week_num = full_data_lm_cat$week
     full_data_lm_cat$week <- as.Date(paste0("2020-03-23"), format = "%Y-%m-%d") + weeks(full_data_lm_cat$week_num - 1)
+    
+    full_data_lm_cat_simp$week_num = full_data_lm_cat_simp$week
+    full_data_lm_cat_simp$week <- as.Date(paste0("2020-03-23"), format = "%Y-%m-%d") + weeks(full_data_lm_cat_simp$week_num - 1)
+    
+    full_data_lm_cat$new_vac_per_1000 = lag(full_data_lm_cat$new_vac_per_1000, 2)
     
     # Split the data frame by countyFIPS
     full_data_lm_cat_list <- full_data_lm_cat %>% split(.$countyFIPS)
+    full_data_lm_cat_simp_list <- full_data_lm_cat_simp %>% split(.$countyFIPS)
+    
     
     # Loop through each data frame and convert to a time series object
     ts_list_cat <- lapply(full_data_lm_cat_list, function(x) {
       ts(x[, -c(1, 2)], start = min(x$week), frequency = 1)
     })
     
-    # MOVEMENT 3: numeric movement
-    full_data_lm_num$week_num = full_data_lm_num$week
+    ts_list_cat_simp <- lapply(full_data_lm_cat_simp_list, function(x) {
+      ts(x[, -c(1, 2)], start = min(x$week), frequency = 1)
+    })
     
+    
+  # MOVEMENT 3: numeric movement
+    full_data_lm_num$week_num = full_data_lm_num$week
     full_data_lm_num$week <- as.Date(paste0("2020-03-23"), format = "%Y-%m-%d") + weeks(full_data_lm_num$week_num - 1)
+    
+    full_data_lm_num_simp$week_num = full_data_lm_num_simp$week
+    full_data_lm_num_simp$week <- as.Date(paste0("2020-03-23"), format = "%Y-%m-%d") + weeks(full_data_lm_num_simp$week_num - 1)
+    
+    
+    full_data_lm_num$new_vac_per_1000 = lag(full_data_lm_num$new_vac_per_1000, 2)
     
     # Split the data frame by countyFIPS
     full_data_lm_num_list <- full_data_lm_num %>% split(.$countyFIPS)
     
+    full_data_lm_num_simp_list <- full_data_lm_num_simp %>% split(.$countyFIPS)
+    
     # Loop through each data frame and convert to a time series object
     ts_list_num <- lapply(full_data_lm_num_list, function(x) {
+      ts(x[, -c(1, 2)], start = min(x$week), frequency = 1)
+    })
+    
+    ts_list_num_simp <- lapply(full_data_lm_num_simp_list, function(x) {
       ts(x[, -c(1, 2)], start = min(x$week), frequency = 1)
     })
 
@@ -669,6 +757,11 @@ pacman::p_load(tidyverse, tidycensus, tigris, sp, sf, tmap, spatstat, sparr, map
     train_list = ts_list_di[c(train_list_counties$unique_counties)]
     train_list_di = Filter(Negate(is.null), train_list)
     
+    test_list = ts_list_di_simp[c(test_list_counties$unique_counties)]
+    test_list_di_simp = Filter(Negate(is.null), test_list)
+    train_list = ts_list_di_simp[c(train_list_counties$unique_counties)]
+    train_list_di_simp = Filter(Negate(is.null), train_list)
+    
     
   # MOVEMENT 2: CATAGORICAL movement
     test_list = ts_list_cat[c(test_list_counties$unique_counties)]
@@ -676,12 +769,21 @@ pacman::p_load(tidyverse, tidycensus, tigris, sp, sf, tmap, spatstat, sparr, map
     train_list = ts_list_cat[c(train_list_counties$unique_counties)]
     train_list_cat = Filter(Negate(is.null), train_list)
     
+    test_list = ts_list_cat_simp[c(test_list_counties$unique_counties)]
+    test_list_cat_simp = Filter(Negate(is.null), test_list)
+    train_list = ts_list_cat_simp[c(train_list_counties$unique_counties)]
+    train_list_cat_simp = Filter(Negate(is.null), train_list)
     
   # MOVEMENT 3: numeric movement
     test_list = ts_list_num[c(test_list_counties$unique_counties)]
     test_list_num = Filter(Negate(is.null), test_list)
     train_list = ts_list_num[c(train_list_counties$unique_counties)]
     train_list_num = Filter(Negate(is.null), train_list)
+    
+    test_list = ts_list_num_simp[c(test_list_counties$unique_counties)]
+    test_list_num_simp = Filter(Negate(is.null), test_list)
+    train_list = ts_list_num_simp[c(train_list_counties$unique_counties)]
+    train_list_num_simp = Filter(Negate(is.null), train_list)
 
 ###------------Gradient Boosted Trees (GBT) Model--------------------------###
     
@@ -718,15 +820,15 @@ pacman::p_load(tidyverse, tidycensus, tigris, sp, sf, tmap, spatstat, sparr, map
     
     #  evaluate the performance of the Gradient Boosted Trees (GBT) model
     
-    mae = as.data.frame(abs(test_y - pred))
+    mae = as.matrix(abs(test_y - pred))
+    mae_GBT_di_full = mae
     mse = as.matrix(((test_y - pred)^2))
     mape = as.matrix((abs((test_y - pred)/test_y)))
     
-    results$mae = as.numeric(results$mae)
-    results$mse = as.numeric(mse)
-    results$mape = as.numeric(mape)
-    
-    
+    results = as.data.frame(cbind(mae, mse, mape))
+    names(results) = c("mae", "mse", "mape")
+    results$mape[results$mape == Inf] <- NA
+    results$mape[results$mape == -Inf] <- NA
     
     # Calculate the mean absolute error (MAE)
     mae = mean(results$mae)
@@ -735,7 +837,7 @@ pacman::p_load(tidyverse, tidycensus, tigris, sp, sf, tmap, spatstat, sparr, map
     rmse = sqrt(mean(results$mse))
     
     # Calculate the mean absolute percentage error (MAPE)
-    mape = mean(results$mape)*100
+    mape = mean(results$mape, rm.na = FALSE)*100
     
     # Calculate the coefficient of determination (R-squared)
     r_squared = cor(test_y, pred)^2
@@ -751,8 +853,8 @@ pacman::p_load(tidyverse, tidycensus, tigris, sp, sf, tmap, spatstat, sparr, map
     #  MAE value of 0.7867125, on average, the model's predictions for mortality deviate from the true mortality values by 0.7867125 units
     #  RMSE value of 1.271944 means that the root mean squared error of the model's predictions is 1.271944 units.
     
-    
-    ###------------MOVEMENT 2: CATAGORICAL movement--------------------------###   
+
+  ###------------MOVEMENT 2: CATAGORICAL movement--------------------------###   
     # total weeks
     n_steps = 106
     
@@ -786,9 +888,11 @@ pacman::p_load(tidyverse, tidycensus, tigris, sp, sf, tmap, spatstat, sparr, map
     #  evaluate the performance of the Gradient Boosted Trees (GBT) model
     
     mae = as.data.frame(abs(test_y - pred))
+    mae_GBT_cat_full = mae
     mse = as.matrix(((test_y - pred)^2))
     mape = as.matrix((abs((test_y - pred)/test_y)))
-    
+    results = as.data.frame(mae)
+    names(results)[1] = "mae"
     results$mae = as.numeric(results$mae)
     results$mse = as.numeric(mse)
     results$mape = as.numeric(mape)
@@ -818,14 +922,16 @@ pacman::p_load(tidyverse, tidycensus, tigris, sp, sf, tmap, spatstat, sparr, map
     #  MAE value of 0.7867125, on average, the model's predictions for mortality deviate from the true mortality values by 0.7867 units
     #  RMSE value of 1.317372 means that the root mean squared error of the model's predictions is 1.3446 units.
     
-    
-    ###------------MOVEMENT 3: numeric movement--------------------------###   
+
+  ###------------MOVEMENT 3: numeric movement--------------------------###   
     # total weeks
     n_steps = 106
     
     ## Convert the time series data to a list of data frames
     train_df = do.call(rbind, lapply(train_list_num, as.data.frame))
     test_df = do.call(rbind, lapply(test_list_num, as.data.frame))
+    
+    
     
     # Create outcome variable vector
     train_list_num = lapply(train_list_num, function(x) as.data.frame(x))
@@ -853,6 +959,7 @@ pacman::p_load(tidyverse, tidycensus, tigris, sp, sf, tmap, spatstat, sparr, map
     #  evaluate the performance of the Gradient Boosted Trees (GBT) model
     
         mae = as.data.frame(abs(test_y - pred))
+        mae_GBT_num_full = mae
         mse = as.matrix(((test_y - pred)^2))
         mape = as.matrix((abs((test_y - pred)/test_y)))
         
@@ -884,7 +991,226 @@ pacman::p_load(tidyverse, tidycensus, tigris, sp, sf, tmap, spatstat, sparr, map
         #  R-squared of 0.6067, it means that 60.67% of the variability in the mortality data can be explained by the GBT model
         #  MAE value of 0.7867, on average, the model's predictions for mortality deviate from the true mortality values by 0.7867 units
         #  RMSE value of 1.3446 means that the root mean squared error of the model's predictions is 1.3446 units.
+        
+        
+###------------MOVEMENT 3: numeric movement SIMPLE--------------------------###   
+        # total weeks
+        n_steps = 106
+        
+        ## Convert the time series data to a list of data frames
+        train_df = do.call(rbind, lapply(train_list_num, as.data.frame))
+        test_df = do.call(rbind, lapply(test_list_num, as.data.frame))
+        train_df =  train_df[,names(train_df) %in% c("education_mean_normalized_visits_by_state_scaling", "grocery_mean_normalized_visits_by_state_scaling",
+                                                                                     "meal_mean_normalized_visits_by_state_scaling", "new_deaths_per_1000","week", "countyFIPS" )]
+        
+        test_df =  test_df[,names(test_df) %in% c("education_mean_normalized_visits_by_state_scaling", "grocery_mean_normalized_visits_by_state_scaling",
+                                                     "meal_mean_normalized_visits_by_state_scaling", "new_deaths_per_1000","week", "countyFIPS" )]
+        
+        
+        
+        # Create outcome variable vector
+        train_list_num = lapply(train_list_num, function(x) as.data.frame(x))
+        train_y = sapply(train_list_num, function(x) x$new_deaths_per_1000)
+        test_list_num = lapply(test_list_num, function(x) as.data.frame(x))
+        test_y = sapply(test_list_num, function(x) x$new_deaths_per_1000)
+        test_y = do.call(rbind, lapply(test_y, as.data.frame))
+        
+        test_y = data.matrix(test_y)
+        
+        
+        # Create input variable matrix
+        train_x = data.matrix(train_df[, !(names(train_df) %in% "new_deaths_per_1000")])
+        test_x = data.matrix(test_df[, !(names(train_df) %in% "new_deaths_per_1000")])
+        
+        # Train GBT model
+        model <- xgboost(data = train_x, label = train_y, nrounds = 50)
+        
+        # Make predictions on test set
+        pred <- predict(model, test_x)
+        
+        # Evaluate model performance
+        cor(test_y, pred)
+        
+        #  evaluate the performance of the Gradient Boosted Trees (GBT) model
+        
+        mae = as.matrix(abs(test_y - pred))
+        mae_GBT_num_simple = mae
+        mse = as.matrix(((test_y - pred)^2))
+        mape = as.matrix((abs((test_y - pred)/test_y)))
+        
+        results = as.data.frame(cbind(mae, mse, mape))
+        names(results) = c("mae", "mse", "mape")
+        results$mape[results$mape == Inf] <- NA
+        results$mape[results$mape == -Inf] <- NA
+        
+        # Calculate the mean absolute error (MAE)
+        mae = mean(results$mae)
+        
+        # Calculate the root mean squared error (RMSE)
+        rmse = sqrt(mean(results$mse))
+        
+        # Calculate the mean absolute percentage error (MAPE)
+        mape = mean(results$mape, rm.na = FALSE)*100
+        
+        # Calculate the coefficient of determination (R-squared)
+        r_squared = cor(test_y, pred)^2
+        
+        # Print the evaluation metrics
+        cat("MAE:", mae, "\n")
+        cat("RMSE:", rmse, "\n")
+        cat("MAPE:", mape, "\n")
+        cat("R-squared:", r_squared, "\n")
+        
+        # bad preformance of the model
+        #  R-squared of .0004004477, it means that 60.67% of the variability in the mortality data can be explained by the GBT model
+        #  MAE value of 1.891814, on average, the model's predictions for mortality deviate from the true mortality values by 1.891814 units
+        #  RMSE value of 3.379743 means that the root mean squared error of the model's predictions is 3.379743 units.
     
+###------------MOVEMENT 2: CATAGORICAL movement SIMPLE--------------------------### 
+        ## Convert the time series data to a list of data frames
+        train_df = do.call(rbind, lapply(train_list_cat, as.data.frame))
+        test_df = do.call(rbind, lapply(test_list_cat, as.data.frame))
+        
+        train_df =  train_df[,names(train_df) %in% c("edu_movement_cat", "grocery_movement_cat",
+                                                     "meal_movement_cat", "new_deaths_per_1000","week", "countyFIPS" )]
+        
+        test_df =  test_df[,names(test_df) %in% c("edu_movement_cat", "grocery_movement_cat",
+                                                  "meal_movement_cat", "new_deaths_per_1000","week", "countyFIPS" )]
+        
+        names(train_df)
+        
+        # Create outcome variable vector
+        train_list_cat = lapply(train_list_cat, function(x) as.data.frame(x))
+        train_y = sapply(train_list_cat, function(x) x$new_deaths_per_1000)
+        test_list_cat = lapply(test_list_cat, function(x) as.data.frame(x))
+        test_y = sapply(test_list_cat, function(x) x$new_deaths_per_1000)
+        test_y = do.call(rbind, lapply(test_y, as.data.frame))
+        
+        test_y = data.matrix(test_y)
+        
+        
+        # Create input variable matrix
+        train_x = data.matrix(train_df[, !(names(train_df) %in% "new_deaths_per_1000")])
+        test_x = data.matrix(test_df[, !(names(train_df) %in% "new_deaths_per_1000")])
+        
+        
+        # Train GBT model
+        model <- xgboost(data = train_x, label = train_y, nrounds = 50)
+        
+        # Make predictions on test set
+        pred <- predict(model, test_x)
+        
+        # Evaluate model performance
+        cor(test_y, pred)
+        
+        #  evaluate the performance of the Gradient Boosted Trees (GBT) model
+        
+        mae = as.matrix(abs(test_y - pred))
+        mae_GBT_cat_simple = mae
+        mse = as.matrix(((test_y - pred)^2))
+        mape = as.matrix((abs((test_y - pred)/test_y)))
+        
+        results = as.data.frame(cbind(mae, mse, mape))
+        names(results) = c("mae", "mse", "mape")
+        results$mape[results$mape == Inf] <- NA
+        results$mape[results$mape == -Inf] <- NA
+        
+        # Calculate the mean absolute error (MAE)
+        mae = mean(results$mae)
+        
+        # Calculate the root mean squared error (RMSE)
+        rmse = sqrt(mean(results$mse))
+        
+        # Calculate the mean absolute percentage error (MAPE)
+        mape = mean(results$mape, rm.na = FALSE)*100
+        
+        # Calculate the coefficient of determination (R-squared)
+        r_squared = cor(test_y, pred)^2
+        
+        # Print the evaluation metrics
+        cat("MAE:", mae, "\n")
+        cat("RMSE:", rmse, "\n")
+        cat("MAPE:", mape, "\n")
+        cat("R-squared:", r_squared, "\n")
+        
+        # bad preformance of the model
+        #  R-squared of 0.02189969, it means that 60.67% of the variability in the mortality data can be explained by the GBT model
+        #  MAE value of 1.328132, on average, the model's predictions for mortality deviate from the true mortality values by 1.328132 units
+        #  RMSE value of 1.979287 means that the root mean squared error of the model's predictions is 1.979287 units.
+
+###------------MOVEMENT 1: di movement SIMPLE--------------------------###   
+        # total weeks
+        n_steps = 106
+        
+        ## Convert the time series data to a list of data frames
+        train_df = do.call(rbind, lapply(train_list_di, as.data.frame))
+        test_df = do.call(rbind, lapply(test_list_di, as.data.frame))
+        train_df =  train_df[,names(train_df) %in% c("edu_movement_increase", "grocery_movement_increase",
+                                                     "meal_movement_increase", "new_deaths_per_1000","week", "countyFIPS" )]
+        
+        test_df =  test_df[,names(test_df) %in% c("edu_movement_increase", "grocery_movement_increase",
+                                                  "meal_movement_increase", "new_deaths_per_1000","week", "countyFIPS" )]
+        
+        # Create outcome variable vector
+        train_list_di = lapply(train_list_di, function(x) as.data.frame(x))
+        train_y = sapply(train_list_di, function(x) x$new_deaths_per_1000)
+        test_list_di = lapply(test_list_di, function(x) as.data.frame(x))
+        test_y = sapply(test_list_di, function(x) x$new_deaths_per_1000)
+        test_y = do.call(rbind, lapply(test_y, as.data.frame))
+        
+        test_y = data.matrix(test_y)
+        
+        
+        # Create input variable matrix
+        train_x = data.matrix(train_df[, !(names(train_df) %in% "new_deaths_per_1000")])
+        test_x = data.matrix(test_df[, !(names(train_df) %in% "new_deaths_per_1000")])
+
+        # Train GBT model
+        model <- xgboost(data = train_x, label = train_y, nrounds = 50)
+        
+        # Make predictions on test set
+        pred <- predict(model, test_x)
+        
+        # Evaluate model performance
+        cor(test_y, pred)
+        
+        #  evaluate the performance of the Gradient Boosted Trees (GBT) model
+        
+        mae = as.matrix(abs(test_y - pred))
+        mae_GBT_di_simple = mae
+        mse = as.matrix(((test_y - pred)^2))
+        mape = as.matrix((abs((test_y - pred)/test_y)))
+        
+        results = as.data.frame(cbind(mae, mse, mape))
+        names(results) = c("mae", "mse", "mape")
+        results$mape[results$mape == Inf] <- NA
+        results$mape[results$mape == -Inf] <- NA
+        
+        # Calculate the mean absolute error (MAE)
+        mae = mean(results$mae)
+        
+        # Calculate the root mean squared error (RMSE)
+        rmse = sqrt(mean(results$mse))
+        
+        # Calculate the mean absolute percentage error (MAPE)
+        mape = mean(results$mape, rm.na = FALSE)*100
+        
+        # Calculate the coefficient of determination (R-squared)
+        r_squared = cor(test_y, pred)^2
+        
+        # Print the evaluation metrics
+        cat("MAE:", mae, "\n")
+        cat("RMSE:", rmse, "\n")
+        cat("MAPE:", mape, "\n")
+        cat("R-squared:", r_squared, "\n")
+        
+        # bad preformance of the model
+        #  R-squared of 0.004000327, it means that 60.67% of the variability in the mortality data can be explained by the GBT model
+        #  MAE value of 1.34146, on average, the model's predictions for mortality deviate from the true mortality values by 1.34146 units
+        #  RMSE value of 2.006809 means that the root mean squared error of the model's predictions is 2.006809 units.
+        
+        
+        
 ###------------reason to remove transportation movement--------------------------###
 length(unique(All_data_edu$countyFIPS))
 length(unique(All_data_grocery$countyFIPS))
@@ -900,7 +1226,7 @@ use_condaenv("r-reticulate", required = TRUE)
 
 ###------------linear models--------------------------###
 # MOVEMENT 1: dichotomous movement
-names(full_data_lm_di)
+names(full_data_lm_cat)
     # models
     model_simple <- lm(new_deaths_per_1000~ edu_movement_increase + 
                          grocery_movement_increase +meal_movement_increase, data=full_data_lm_di)
@@ -912,10 +1238,10 @@ names(full_data_lm_di)
 
 # MOVEMENT 2: CATAGORICAL movement
     # models
-    model_simple <- lm(new_deaths_per_1000~ education_mean_normalized_visits_by_state_scaling + 
-                         grocery_mean_normalized_visits_by_state_scaling +meal_mean_normalized_visits_by_state_scaling, data=full_data_lm_cat)
+    model_simple <- lm(new_deaths_per_1000~ edu_movement_cat + 
+                         grocery_movement_cat +meal_movement_cat, data=full_data_lm_cat)
     model_full <- lm(new_deaths_per_1000~., data=full_data_lm_cat)
-    
+
     # Print model summary
     summary(model_simple)   
     summary(model_full)
@@ -967,7 +1293,8 @@ county_names = read_xlsx("/Users/Erica/Library/CloudStorage/OneDrive-EmoryUniver
         scale_x_date(date_breaks = "1 week") +
         geom_smooth(aes(x = week, y = education_mean_normalized_visits_by_state_scaling * max(new_deaths_per_1000) / max(education_mean_normalized_visits_by_state_scaling)), method = "loess", formula = y ~ x, color = "blue") +
         geom_smooth(aes(x = week, y = grocery_mean_normalized_visits_by_state_scaling * max(new_deaths_per_1000) / max(grocery_mean_normalized_visits_by_state_scaling)), method = "loess", formula = y ~ x, color = "red")+
-        geom_smooth(aes(x = week, y = transportation_mean_normalized_visits_by_state_scaling * max(new_deaths_per_1000) / max(transportation_mean_normalized_visits_by_state_scaling)), method = "loess", formula = y ~ x, color = "green")+
+        geom_smooth(aes(x = week, y = meal_mean_normalized_visits_by_state_scaling * max(new_deaths_per_1000) / max(meal_mean_normalized_visits_by_state_scaling)), method = "loess", formula = y ~ x, color = "green")+
+        geom_smooth(aes(x = week, y = transportation_mean_normalized_visits_by_state_scaling * max(new_deaths_per_1000) / max(transportation_mean_normalized_visits_by_state_scaling)), method = "loess", formula = y ~ x, color = "purple")+
         geom_smooth(aes(x = week, y = new_vac_per_1000 * max(new_deaths_per_1000) / max(new_vac_per_1000)),method = "loess", formula = y ~ x, color = "purple")+
         labs(title = "name", y = "New Deaths", x = "Dates")
     }
@@ -1001,45 +1328,426 @@ county_names = read_xlsx("/Users/Erica/Library/CloudStorage/OneDrive-EmoryUniver
     }
     
     
-top_counties = c("Fulton", "Gwinnett", "Cobb", "DeKalb", "Clayton", "Chatham", "Richmond", "Hall", "Muscogee")
-bottom_counties = c("Calhoun", "Chattahoochee", "Baker", "Echols", "Schley", "Webster", "Clay", "Quitman", "Taliaferro")
+    top_counties = c("Fulton", "Gwinnett", "Cobb", "DeKalb", "Clayton", "Chatham", "Richmond", "Hall", "Muscogee")
+    bottom_counties = c("Calhoun", "Chattahoochee", "Baker", "Echols", "Schley", "Webster", "Clay", "Quitman", "Taliaferro")
+    
+    top_hist = updated_hist_list[top_counties]
+    grid.arrange(
+      top_hist[[1]], top_hist[[2]], top_hist[[3]],
+      top_hist[[4]], top_hist[[5]], top_hist[[6]],
+      top_hist[[7]], top_hist[[8]], top_hist[[9]],
+      nrow = 3
+    )
+    
+    bottom_hist = updated_hist_list[bottom_counties]
+    grid.arrange(
+      bottom_hist[[1]], bottom_hist[[2]], bottom_hist[[3]],
+      bottom_hist[[4]], bottom_hist[[5]], bottom_hist[[6]],
+      bottom_hist[[7]], bottom_hist[[8]], bottom_hist[[9]],
+      nrow = 3
+    )
 
-top_hist = updated_hist_list[top_counties]
-grid.arrange(
-  top_hist[[1]], top_hist[[2]], top_hist[[3]],
-  top_hist[[4]], top_hist[[5]], top_hist[[6]],
-  top_hist[[7]], top_hist[[8]], top_hist[[9]],
-  nrow = 3
-)
 
-bottom_hist = updated_hist_list[bottom_counties]
-grid.arrange(
-  bottom_hist[[1]], bottom_hist[[2]], bottom_hist[[3]],
-  bottom_hist[[4]], bottom_hist[[5]], bottom_hist[[6]],
-  bottom_hist[[7]], bottom_hist[[8]], bottom_hist[[9]],
-  nrow = 3
-)
+###------------Gradient Boosted Trees (GBT) Model LAG--------------------------###
+
+  ###------------MOVEMENT 1: dichotomous movement--------------------------### test_list_di_simp  train_list_di_simp
+    ## Convert the time series data to a list of data frames
+    train_df = do.call(rbind, lapply(train_list_di_simp, as.data.frame))
+    test_df = do.call(rbind, lapply(test_list_di_simp, as.data.frame))
+    
+    
+    # Create outcome variable vector
+    train_list_di_simp = lapply(train_list_di_simp, function(x) as.data.frame(x))
+    train_y = sapply(train_list_di_simp, function(x) x$new_deaths_per_1000)
+    train_y = do.call(rbind, lapply(train_y, as.data.frame))
+    
+    test_list_di_simp = lapply(test_list_di_simp, function(x) as.data.frame(x))
+    test_y = sapply(test_list_di_simp, function(x) x$new_deaths_per_1000)
+    test_y = do.call(rbind, lapply(test_y, as.data.frame))
+    
+    #test_y = data.matrix(test_y)
+    
+    
+    # Create input variable matrix
+    train_x = data.matrix(train_df[, !(names(train_df) %in% "new_deaths_per_1000")])
+    test_x = data.matrix(test_df[, !(names(train_df) %in% "new_deaths_per_1000")])
 
 
+    # create a list of lag periods to evaluate
+    lags <- 0:20
+    
+    # Create empty data frames to store the results
+    precision <- rep(0, length(lags)+1)
+    accuracy <- rep(0, length(lags)+1)
+    mse <- rep(0, length(lags)+1)
+    rmse <- rep(0, length(lags)+1)
+    
+    
+    # loop over each lag period
+    for (i in 1:length(lags)) {
+      # Add lagged predictors to the training and test sets
+      # create a time series model matrix with the specified lag period
+      train_x_lag <- as.data.frame(train_x)
+      test_x_lag <- as.data.frame(test_x)
+      
+      train_x_lag$edu_movement_increase = lag(train_x_lag$edu_movement_increase, n=i)
+      train_x_lag$grocery_movement_increase = lag(train_x_lag$grocery_movement_increase, n=i)
+      train_x_lag$meal_movement_increase = lag(train_x_lag$meal_movement_increase, n=i)
+      
+      train_x_lag = as.matrix(train_x_lag[-(1:i),])
+      train_y_lag <- as.matrix(train_y[-(1:i),])
+      
+      test_x_lag$edu_movement_increase = lag(test_x_lag$edu_movement_increase, n=i)
+      test_x_lag$grocery_movement_increase = lag(test_x_lag$grocery_movement_increase, n=i)
+      test_x_lag$meal_movement_increase = lag(test_x_lag$meal_movement_increase, n=i)
+      
+      test_x_lag = as.matrix(test_x_lag[-(1:i),])
+      test_y_lag <- as.matrix(test_y[-(1:i),])
+      
+      
+      # Create DMatrix objects
+      dtrain <- xgb.DMatrix(data = train_x_lag, label = train_y_lag)
+      dtest <- xgb.DMatrix(data = test_x_lag, label = test_y_lag)
+      
+      # Train the model
+      xgb_model <- xgb.train(data = dtrain, objective = "reg:squarederror", nrounds = 50,
+                             print_every_n = 10)
+      
+      # Make predictions on the test set
+      pred <- predict(xgb_model, dtest)
+      
+      # Calculate precision and accuracy
+      precision[i+1] <- mean(ifelse((pred > 0.5) == test_y, 1, 0))
+      accuracy[i+1] <- mean(pred == test_y)
+      
+      # Calculate mean squared error and root mean squared error
+      p = as.data.frame((test_y - pred)^2)
+      p = as.numeric(p$`X[[i]]`)
+      
+      mse[i+1] = mean(p, na.rm = FALSE)
+      rmse[i+1] = sqrt(mse[i+1])
+    }
+    
+    lag_periods <- c(0, lags)
+    results_df <- data.frame(lag_period = lag_periods, mse = mse, rmse = rmse)
+    
+    together_plot_di = ggplot(results_df, aes(x = lag_periods)) +
+      geom_point(aes(y = mse, color = "MSE"), size = 3) +
+      geom_point(aes(y = rmse, color = "RMSE"), size = 3) +
+      labs(x = "Lag", y = "Error") +
+      scale_color_manual(name = "Error Type", values = c("MSE" = "blue", "RMSE" = "red"))
+    
+  ###------------MOVEMENT 2: CATAGORICAL movement--------------------------###  test_list_cat_simp  train_list_cat_simp
+    ## Convert the time series data to a list of data frames
+    train_df = do.call(rbind, lapply(train_list_cat_simp, as.data.frame))
+    test_df = do.call(rbind, lapply(test_list_cat_simp, as.data.frame))
+    
+    
+    # Create outcome variable vector
+    train_list_cat_simp = lapply(train_list_cat_simp, function(x) as.data.frame(x))
+    train_y = sapply(train_list_cat_simp, function(x) x$new_deaths_per_1000)
+    train_y = do.call(rbind, lapply(train_y, as.data.frame))
+    
+    test_list_cat_simp = lapply(test_list_cat_simp, function(x) as.data.frame(x))
+    test_y = sapply(test_list_cat_simp, function(x) x$new_deaths_per_1000)
+    test_y = do.call(rbind, lapply(test_y, as.data.frame))
+    
+    #test_y = data.matrix(test_y)
+    
+    
+    # Create input variable matrix
+    train_x = data.matrix(train_df[, !(names(train_df) %in% "new_deaths_per_1000")])
+    test_x = data.matrix(test_df[, !(names(train_df) %in% "new_deaths_per_1000")])
+    
+    
+    # create a list of lag periods to evaluate
+    lags <- 0:20
+    
+    # Create empty data frames to store the results
+    precision <- rep(0, length(lags)+1)
+    accuracy <- rep(0, length(lags)+1)
+    mse <- rep(0, length(lags)+1)
+    rmse <- rep(0, length(lags)+1)
+    
+    
+    # loop over each lag period
+    for (i in 1:length(lags)) {
+      # Add lagged predictors to the training and test sets
+      # create a time series model matrix with the specified lag period
+      train_x_lag <- as.data.frame(train_x)
+      test_x_lag <- as.data.frame(test_x)
+    
+      train_x_lag$edu_movement_cat = lag(train_x_lag$edu_movement_cat, n=i)
+      train_x_lag$grocery_movement_cat = lag(train_x_lag$grocery_movement_cat, n=i)
+      train_x_lag$meal_movement_cat = lag(train_x_lag$meal_movement_cat, n=i)
+      
+      train_x_lag = as.matrix(train_x_lag[-(1:i),])
+      train_y_lag <- as.matrix(train_y[-(1:i),])
+      
+      test_x_lag$edu_movement_cat = lag(test_x_lag$edu_movement_cat, n=i)
+      test_x_lag$grocery_movement_cat = lag(test_x_lag$grocery_movement_cat, n=i)
+      test_x_lag$meal_movement_cat = lag(test_x_lag$meal_movement_cat, n=i)
+      
+      test_x_lag = as.matrix(test_x_lag[-(1:i),])
+      test_y_lag <- as.matrix(test_y[-(1:i),])
+      
+      
+      # Create DMatrix objects
+      dtrain <- xgb.DMatrix(data = train_x_lag, label = train_y_lag)
+      dtest <- xgb.DMatrix(data = test_x_lag, label = test_y_lag)
+      
+      # Train the model
+      xgb_model <- xgb.train(data = dtrain, objective = "reg:squarederror", nrounds = 50,
+                             print_every_n = 10)
+      
+      # Make predictions on the test set
+      pred <- predict(xgb_model, dtest)
+      
+      # Calculate precision and accuracy
+      precision[i+1] <- mean(ifelse((pred > 0.5) == test_y, 1, 0))
+      accuracy[i+1] <- mean(pred == test_y)
+      
+      # Calculate mean squared error and root mean squared error
+      p = as.data.frame((test_y - pred)^2)
+      p = as.numeric(p$`X[[i]]`)
+      
+      mse[i+1] = mean(p, na.rm = FALSE)
+      rmse[i+1] = sqrt(mse[i+1])
+    }
+    
+    lag_periods <- c(0, lags)
+    results_df <- data.frame(lag_period = lag_periods, mse = mse, rmse = rmse)
+    
+    together_plot_cat = ggplot(results_df, aes(x = lag_periods)) +
+      geom_point(aes(y = mse, color = "MSE"), size = 3) +
+      geom_point(aes(y = rmse, color = "RMSE"), size = 3) +
+      labs(x = "Lag", y = "Error") +
+      scale_color_manual(name = "Error Type", values = c("MSE" = "blue", "RMSE" = "red"))
+    
+  ###------------MOVEMENT 3: numeric movement------------------------------###   test_list_num_simp  train_list_num_simp
+    ## Convert the time series data to a list of data frames
+    train_df = do.call(rbind, lapply(train_list_num_simp, as.data.frame))
+    test_df = do.call(rbind, lapply(test_list_num_simp, as.data.frame))
+    
+    
+    # Create outcome variable vector
+    train_list_num_simp = lapply(train_list_num_simp, function(x) as.data.frame(x))
+    train_y = sapply(train_list_num_simp, function(x) x$new_deaths_per_1000)
+    train_y = do.call(rbind, lapply(train_y, as.data.frame))
+    
+    test_list_num_simp = lapply(test_list_num_simp, function(x) as.data.frame(x))
+    test_y = sapply(test_list_num_simp, function(x) x$new_deaths_per_1000)
+    test_y = do.call(rbind, lapply(test_y, as.data.frame))
+    
+    #test_y = data.matrix(test_y)
+    
+  
+    # Create input variable matrix
+    train_x = data.matrix(train_df[, !(names(train_df) %in% "new_deaths_per_1000")])
+    test_x = data.matrix(test_df[, !(names(train_df) %in% "new_deaths_per_1000")])
+    
+    
+    # create a list of lag periods to evaluate
+    lags <- 0:20
+    
+    # Create empty data frames to store the results
+    precision <- rep(0, length(lags)+1)
+    accuracy <- rep(0, length(lags)+1)
+    mse <- rep(0, length(lags)+1)
+    rmse <- rep(0, length(lags)+1)
+    
+    
+    # loop over each lag period
+    for (i in 1:length(lags)) {
+      # Add lagged predictors to the training and test sets
+      # create a time series model matrix with the specified lag period
+      train_x_lag <- as.data.frame(train_x)
+      test_x_lag <- as.data.frame(test_x)
+      
+      train_x_lag$education_mean_normalized_visits_by_state_scaling = lag(train_x_lag$education_mean_normalized_visits_by_state_scaling, n=i)
+      train_x_lag$grocery_mean_normalized_visits_by_state_scaling = lag(train_x_lag$grocery_mean_normalized_visits_by_state_scaling, n=i)
+      train_x_lag$meal_mean_normalized_visits_by_state_scaling = lag(train_x_lag$meal_mean_normalized_visits_by_state_scaling, n=i)
+      
+      train_x_lag = as.matrix(train_x_lag[-(1:i),])
+      train_y_lag <- as.matrix(train_y[-(1:i),])
+      
+      test_x_lag$education_mean_normalized_visits_by_state_scaling = lag(test_x_lag$education_mean_normalized_visits_by_state_scaling, n=i)
+      test_x_lag$grocery_mean_normalized_visits_by_state_scaling = lag(test_x_lag$grocery_mean_normalized_visits_by_state_scaling, n=i)
+      test_x_lag$meal_mean_normalized_visits_by_state_scaling = lag(test_x_lag$meal_mean_normalized_visits_by_state_scaling, n=i)
+      
+      test_x_lag = as.matrix(test_x_lag[-(1:i),])
+      test_y_lag <- as.matrix(test_y[-(1:i),])
+      
+      
+      # Create DMatrix objects
+      dtrain <- xgb.DMatrix(data = train_x_lag, label = train_y_lag)
+      dtest <- xgb.DMatrix(data = test_x_lag, label = test_y_lag)
+      
+      # Train the model
+      xgb_model <- xgb.train(data = dtrain, objective = "reg:squarederror", nrounds = 50,
+                             print_every_n = 10)
+      
+      # Make predictions on the test set
+      pred <- predict(xgb_model, dtest)
+      
+      # Calculate precision and accuracy
+      precision[i+1] <- mean(ifelse((pred > 0.5) == test_y, 1, 0))
+      accuracy[i+1] <- mean(pred == test_y)
+      
+      # Calculate mean squared error and root mean squared error
+      p = as.data.frame((test_y - pred)^2)
+      p = as.numeric(p$`X[[i]]`)
+      
+      mse[i+1] = mean(p, na.rm = FALSE)
+      rmse[i+1] = sqrt(mse[i+1])
+    }
+    
+    lag_periods <- c(0, lags)
+    results_df <- data.frame(lag_period = lag_periods, mse = mse, rmse = rmse)
+    
+    together_plot_num = ggplot(results_df, aes(x = lag_periods)) +
+      geom_point(aes(y = mse, color = "MSE"), size = 3) +
+      geom_point(aes(y = rmse, color = "RMSE"), size = 3) +
+      labs(x = "Lag", y = "Error") +
+      scale_color_manual(name = "Error Type", values = c("MSE" = "blue", "RMSE" = "red"))
 
     
-           
-           
-           
-           
-           
-           
-           
-           
-           
-           
-           
-           
-           
-           
-           
-      
-      
-      
+###------------MOVEMENT 3: numeric movement not simple------------------------------###   test_list_num_simp  train_list_num_simp
+    ## Convert the time series data to a list of data frames
+    train_df = do.call(rbind, lapply(train_list_num, as.data.frame))
+    test_df = do.call(rbind, lapply(test_list_num, as.data.frame))
     
+    
+    # Create outcome variable vector
+    train_list_num = lapply(train_list_num, function(x) as.data.frame(x))
+    train_y = sapply(train_list_num, function(x) x$new_deaths_per_1000)
+    train_y = do.call(rbind, lapply(train_y, as.data.frame))
+    
+    test_list_num = lapply(test_list_num, function(x) as.data.frame(x))
+    test_y = sapply(test_list_num, function(x) x$new_deaths_per_1000)
+    test_y = do.call(rbind, lapply(test_y, as.data.frame))
+    
+    #test_y = data.matrix(test_y)
+    
+    
+    # Create input variable matrix
+    train_x = data.matrix(train_df[, !(names(train_df) %in% "new_deaths_per_1000")])
+    test_x = data.matrix(test_df[, !(names(train_df) %in% "new_deaths_per_1000")])
+    
+    
+    # create a list of lag periods to evaluate
+    lags <- 0:20
+    
+    # Create empty data frames to store the results
+    precision <- rep(0, length(lags)+1)
+    accuracy <- rep(0, length(lags)+1)
+    mse <- rep(0, length(lags)+1)
+    rmse <- rep(0, length(lags)+1)
+    
+    
+    # loop over each lag period
+    for (i in 1:length(lags)) {
+      # Add lagged predictors to the training and test sets
+      # create a time series model matrix with the specified lag period
+      train_x_lag <- as.data.frame(train_x)
+      test_x_lag <- as.data.frame(test_x)
       
+      train_x_lag$education_mean_normalized_visits_by_state_scaling = lag(train_x_lag$education_mean_normalized_visits_by_state_scaling, n=i)
+      train_x_lag$grocery_mean_normalized_visits_by_state_scaling = lag(train_x_lag$grocery_mean_normalized_visits_by_state_scaling, n=i)
+      train_x_lag$meal_mean_normalized_visits_by_state_scaling = lag(train_x_lag$meal_mean_normalized_visits_by_state_scaling, n=i)
+      train_x_lag$new_vac_per_1000 = lag(train_x_lag$new_vac_per_1000, n=i, 2)
+      
+      train_x_lag = as.matrix(train_x_lag[-(1:i),])
+      train_y_lag <- as.matrix(train_y[-(1:i),])
+      
+      test_x_lag$education_mean_normalized_visits_by_state_scaling = lag(test_x_lag$education_mean_normalized_visits_by_state_scaling, n=i)
+      test_x_lag$grocery_mean_normalized_visits_by_state_scaling = lag(test_x_lag$grocery_mean_normalized_visits_by_state_scaling, n=i)
+      test_x_lag$meal_mean_normalized_visits_by_state_scaling = lag(test_x_lag$meal_mean_normalized_visits_by_state_scaling, n=i)
+      test_x_lag$new_vac_per_1000 = lag(test_x_lag$new_vac_per_1000, 2)
+      
+      test_x_lag = as.matrix(test_x_lag[-(1:i),])
+      test_y_lag <- as.matrix(test_y[-(1:i),])
+      
+      
+      # Create DMatrix objects
+      dtrain <- xgb.DMatrix(data = train_x_lag, label = train_y_lag)
+      dtest <- xgb.DMatrix(data = test_x_lag, label = test_y_lag)
+      
+      # Train the model
+      xgb_model <- xgb.train(data = dtrain, objective = "reg:squarederror", nrounds = 50,
+                             print_every_n = 10)
+      
+      # Make predictions on the test set
+      pred <- predict(xgb_model, dtest)
+      
+      # Calculate precision and accuracy
+      precision[i+1] <- mean(ifelse((pred > 0.5) == test_y, 1, 0))
+      accuracy[i+1] <- mean(pred == test_y)
+      
+      # Calculate mean squared error and root mean squared error
+      p = as.data.frame((test_y - pred)^2)
+      p = as.numeric(p$`X[[i]]`)
+      
+      mse[i+1] = mean(p, na.rm = FALSE)
+      rmse[i+1] = sqrt(mse[i+1])
+    }
+    
+    lag_periods <- c(0, lags)
+    results_df <- data.frame(lag_period = lag_periods, mse = mse, rmse = rmse)
+    
+    together_plot_all_vars = ggplot(results_df, aes(x = lag_periods)) +
+      geom_point(aes(y = mse, color = "MSE"), size = 3) +
+      geom_point(aes(y = rmse, color = "RMSE"), size = 3) +
+      labs(x = "Lag", y = "Error") +
+      scale_color_manual(name = "Error Type", values = c("MSE" = "blue", "RMSE" = "red"))
+    
+    
+    plot_grid(together_plot_di, together_plot_cat, 
+              together_plot_num, together_plot_all_vars,
+              labels=c('A', 'B', "C", "D"))
+    
+    
+    abs_diff_GBT_models <- data.frame(mae_GBT_di_full,
+                                      mae_GBT_cat_full,
+                                      mae_GBT_num_full,
+                                      mae_GBT_num_simple,
+                                      mae_GBT_cat_simple,
+                                      mae_GBT_di_simple
+    )
+    names(abs_diff_GBT_models) = c("Full_Dichotomous",
+                                   "Full_Categorical",
+                                   "Full_Continuous",
+                                   "Simple_Continuous",
+                                  "Simple_Categorical",
+                                  "Simple_Dichotomous")
+    abs_diff_GBT_models$week = test_df$week_num
+    
+    
+    all_deaths = aggregate(new_deaths_per_1000 ~ week, full_data_lm, sum)
+    
+    abs_diff_GBT_models = abs_diff_GBT_models %>% inner_join(all_deaths, by = "week")
+    
+    
+    error_GBT  = ggplot(abs_diff_GBT_models, aes(x = week)) +
+      geom_smooth(aes(y = Full_Dichotomous, color = "Full Dichotomous")) +
+      geom_smooth(aes(y = Full_Categorical, color = "Full Categorical")) +
+      geom_smooth(aes(y = Full_Continuous, color = "Full Continuous")) +
+      geom_smooth(aes(y = Simple_Continuous, color = "Simple Continuous")) +
+      geom_smooth(aes(y = Simple_Dichotomous, color = "Simple Dichotomous")) +
+      geom_smooth(aes(y = Simple_Categorical, color = "Simple Categorical")) +
+      geom_smooth(aes(x = week, y = new_deaths_per_1000 * max(Simple_Categorical) / max(new_deaths_per_1000), color = "Actual Mortality Scaled")) +
+      labs(title ="GBT Model Diffence in Predicted to Actual Mortality" ,x = "Week", y = "Absolute Error") +
+      scale_color_manual(name = "GBT Model Type", values = c("Full Dichotomous" = "blue", 
+                                                         "Full Categorical" = "red",
+                                                         "Full Continuous" = 'purple',
+                                                         "Simple Continuous" = "yellow",
+                                                        "Simple Categorical" = 'orange',
+                                                       "Simple Dichotomous" = "green",
+                                                       "Actual Mortality Scaled" = "black"))
+    
+    
+    error_GBT
+    
+    
+    
+           
